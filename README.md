@@ -171,6 +171,9 @@ project-folder/
 * Installer setup (.exe wizard)
 
 ---
+## ▶️ Demo
+
+https://www.youtube.com/watch?v=XTDXAKkgGdE&list=PLBip7ccT-VcsgEbjz1ObwGUfuJRN8R7LB
 
 ## 👨‍💻 Author
 
