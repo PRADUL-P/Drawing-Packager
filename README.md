@@ -11,7 +11,7 @@ A lightweight desktop tool built for civil engineers to automate packaging of dr
 
 ## 📸 Preview
 
-<img width="990" height="640" alt="image" src="https://github.com/user-attachments/assets/9defb8e4-b936-4570-9b79-711876e9830b" />
+<img width="1001" height="639" alt="image" src="https://github.com/user-attachments/assets/c82649ab-c021-466f-b257-667d478bbf08" />
 
 
 
