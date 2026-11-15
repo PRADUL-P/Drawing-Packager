@@ -3,7 +3,6 @@ import sys
 import shutil
 import zipfile
 import json
-import csv
 from datetime import datetime
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
@@ -49,8 +48,7 @@ def load_config():
         "separator": "_",
         "include_date": True,
         "include_rev": False,
-        "auto_pack_on_drop": True,
-        "erp_file_path": ""
+        "auto_pack_on_drop": True
     }
     if os.path.exists(CONFIG_FILE):
         try:
@@ -91,63 +89,6 @@ def format_size(bytes_size):
 def safe_open_folder(path):
     if path and os.path.exists(path):
         os.startfile(path)
-
-
-# ================= ERP / DATABASE INTEGRATION =================
-
-class ERPManager:
-    """Links to Custom ERP / Project Management database or project register CSV."""
-
-    @staticmethod
-    def lookup_project(job_code, erp_file=""):
-        if not erp_file or not os.path.exists(erp_file):
-            return None, None
-
-        job_code = str(job_code).strip().lower()
-        if not job_code:
-            return None, None
-
-        ext = os.path.splitext(erp_file)[1].lower()
-        try:
-            if ext == ".csv":
-                with open(erp_file, "r", encoding="utf-8-sig") as f:
-                    reader = csv.DictReader(f)
-                    for row in reader:
-                        clean_row = {"".join(c for c in k.lower() if c.isalnum()): v.strip() for k, v in row.items() if k}
-                        # Match job/code
-                        matched = False
-                        for key in ["job", "jobnumber", "jobno", "jobnum", "code", "projectcode", "projectnumber", "projectno", "id"]:
-                            if key in clean_row and clean_row[key].lower() == job_code:
-                                matched = True
-                                break
-                        if matched:
-                            # Match client
-                            client = ""
-                            for ck in ["client", "clientname", "clienttitle"]:
-                                if ck in clean_row:
-                                    client = clean_row[ck]
-                                    break
-                            # Match project
-                            project = ""
-                            for pk in ["project", "projectname", "projecttitle", "title"]:
-                                if pk in clean_row:
-                                    project = clean_row[pk]
-                                    break
-                            return client, project
-
-            elif ext == ".json":
-                with open(erp_file, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    items = data if isinstance(data, list) else data.get("projects", [])
-                    for item in items:
-                        code = str(item.get("code") or item.get("job") or item.get("id") or "").lower()
-                        if code == job_code:
-                            return item.get("client", ""), item.get("project", "")
-
-        except Exception:
-            pass
-
-        return None, None
 
 
 # ================= METADATA & FILE DETECTOR =================
@@ -249,8 +190,8 @@ class DrawingPackagerApp:
     def __init__(self, root):
         self.root = root
         self.root.title(f"{APP_NAME} {APP_VERSION}")
-        self.root.geometry("880x560")
-        self.root.minsize(820, 520)
+        self.root.geometry("880x540")
+        self.root.minsize(820, 500)
         self.root.configure(bg=BG)
 
         icon_path = resource_path("zip-folder.ico")
@@ -298,7 +239,7 @@ class DrawingPackagerApp:
         tk.Label(title_box, text=f" {APP_VERSION} ", font=("Segoe UI", 8, "bold"),
                  bg=ACCENT_BLUE, fg="white", padx=4, pady=1).pack(side="left", padx=8)
 
-        # Right Action Toggles
+        # Right Action Toggle
         right_header = tk.Frame(header, bg=BG)
         right_header.pack(side="right")
 
@@ -312,15 +253,7 @@ class DrawingPackagerApp:
             activebackground=BG,
             command=self.save_preferences
         )
-        chk_autopack.pack(side="left", padx=(0, 10))
-
-        btn_erp = tk.Button(
-            right_header, text="⚙️ ERP Link", font=("Segoe UI", 8),
-            bg=BTN_BG, fg=TEXT_MAIN, relief="flat", padx=8, pady=2,
-            command=self.open_erp_dialog
-        )
-        btn_erp.pack(side="left")
-        self.add_hover(btn_erp, BTN_BG, BTN_HOVER)
+        chk_autopack.pack(side="right")
 
         # ================= MAIN TWO-COLUMN BODY =================
         main_body = tk.Frame(self.root, bg=BG)
@@ -330,73 +263,50 @@ class DrawingPackagerApp:
         main_body.grid_rowconfigure(0, weight=1)
 
         # ----------------- LEFT PANEL: METADATA & NAMING -----------------
-        left = tk.Frame(main_body, bg=CARD, relief="flat", padx=16, pady=14, highlightbackground=BORDER, highlightthickness=1)
+        left = tk.Frame(main_body, bg=CARD, relief="flat", padx=16, pady=16, highlightbackground=BORDER, highlightthickness=1)
         left.grid(row=0, column=0, sticky="nsew", padx=(4, 6), pady=4)
-
-        # ERP Quick Lookup Bar
-        erp_row = tk.Frame(left, bg=CARD)
-        erp_row.pack(fill="x", pady=(0, 8))
-
-        tk.Label(erp_row, text="JOB / PROJECT CODE", font=("Segoe UI", 8, "bold"),
-                 bg=CARD, fg=TEXT_MUTED).pack(anchor="w")
-
-        code_box = tk.Frame(erp_row, bg=CARD)
-        code_box.pack(fill="x", pady=(2, 0))
-
-        self.job_code_var = tk.StringVar()
-        self.job_code_entry = tk.Entry(code_box, textvariable=self.job_code_var, bg=INPUT_BG,
-                                       fg=TEXT_MAIN, relief="flat", insertbackground="white",
-                                       highlightbackground=BORDER, highlightthickness=1)
-        self.job_code_entry.pack(side="left", fill="x", expand=True, ipady=4)
-        self.job_code_entry.bind("<Return>", lambda e: self.fetch_from_erp())
-
-        btn_fetch = tk.Button(code_box, text="🔍 Lookup ERP", font=("Segoe UI", 8, "bold"),
-                              bg=ACCENT_BLUE, fg="white", relief="flat", padx=8,
-                              command=self.fetch_from_erp)
-        btn_fetch.pack(side="right", padx=(6, 0))
-        self.add_hover(btn_fetch, ACCENT_BLUE, "#1b60d1")
 
         # Client Name (Strictly for Client files)
         tk.Label(left, text="CLIENT NAME", font=("Segoe UI", 8, "bold"),
-                 bg=CARD, fg=TEXT_MUTED).pack(anchor="w", pady=(6, 0))
+                 bg=CARD, fg=TEXT_MUTED).pack(anchor="w", pady=(0, 0))
         client_box = tk.Frame(left, bg=CARD)
-        client_box.pack(fill="x", pady=(2, 6))
+        client_box.pack(fill="x", pady=(2, 10))
 
         self.client_var = tk.StringVar(value=self.config.get("recent_clients", [""])[0] if self.config.get("recent_clients") else "")
         self.client_entry = tk.Entry(client_box, textvariable=self.client_var, bg=INPUT_BG,
                                      fg=TEXT_MAIN, relief="flat", insertbackground="white",
                                      highlightbackground=BORDER, highlightthickness=1)
-        self.client_entry.pack(side="left", fill="x", expand=True, ipady=4)
+        self.client_entry.pack(side="left", fill="x", expand=True, ipady=5)
         self.client_var.trace_add("write", lambda *args: self.update_preview())
 
         btn_paste_c = tk.Button(client_box, text="Paste", font=("Segoe UI", 8),
-                                bg=BTN_BG, fg=TEXT_MAIN, relief="flat", padx=8,
+                                bg=BTN_BG, fg=TEXT_MAIN, relief="flat", padx=10,
                                 command=lambda: self.paste_var(self.client_var))
         btn_paste_c.pack(side="right", padx=(6, 0))
         self.add_hover(btn_paste_c, BTN_BG, BTN_HOVER)
 
         # Project Name (Strictly for Project files)
         tk.Label(left, text="PROJECT NAME", font=("Segoe UI", 8, "bold"),
-                 bg=CARD, fg=TEXT_MUTED).pack(anchor="w", pady=(4, 0))
+                 bg=CARD, fg=TEXT_MUTED).pack(anchor="w", pady=(2, 0))
         proj_box = tk.Frame(left, bg=CARD)
-        proj_box.pack(fill="x", pady=(2, 6))
+        proj_box.pack(fill="x", pady=(2, 10))
 
         self.project_var = tk.StringVar(value=self.config.get("recent_projects", [""])[0] if self.config.get("recent_projects") else "")
         self.project_entry = tk.Entry(proj_box, textvariable=self.project_var, bg=INPUT_BG,
                                       fg=TEXT_MAIN, relief="flat", insertbackground="white",
                                       highlightbackground=BORDER, highlightthickness=1)
-        self.project_entry.pack(side="left", fill="x", expand=True, ipady=4)
+        self.project_entry.pack(side="left", fill="x", expand=True, ipady=5)
         self.project_var.trace_add("write", lambda *args: self.update_preview())
 
         btn_paste_p = tk.Button(proj_box, text="Paste", font=("Segoe UI", 8),
-                                bg=BTN_BG, fg=TEXT_MAIN, relief="flat", padx=8,
+                                bg=BTN_BG, fg=TEXT_MAIN, relief="flat", padx=10,
                                 command=lambda: self.paste_var(self.project_var))
         btn_paste_p.pack(side="right", padx=(6, 0))
         self.add_hover(btn_paste_p, BTN_BG, BTN_HOVER)
 
         # Date Option
         date_bar = tk.Frame(left, bg=CARD)
-        date_bar.pack(fill="x", pady=(4, 4))
+        date_bar.pack(fill="x", pady=(4, 8))
 
         self.include_date_var = tk.BooleanVar(value=self.config.get("include_date", True))
         chk_date = tk.Checkbutton(date_bar, text="Add Date to Client files:", variable=self.include_date_var,
@@ -411,31 +321,31 @@ class DrawingPackagerApp:
         self.date_picker.bind("<<DateEntrySelected>>", lambda e: self.update_preview())
 
         # Target 6 Files Live Preview Box
-        preview_box = tk.Frame(left, bg=CARD_SECONDARY, relief="flat", padx=10, pady=8, highlightbackground=BORDER, highlightthickness=1)
-        preview_box.pack(fill="both", expand=True, pady=(8, 0))
+        preview_box = tk.Frame(left, bg=CARD_SECONDARY, relief="flat", padx=12, pady=10, highlightbackground=BORDER, highlightthickness=1)
+        preview_box.pack(fill="both", expand=True, pady=(10, 0))
 
         tk.Label(preview_box, text="OUTPUT TARGET (6 FILES):", font=("Segoe UI", 8, "bold"),
                  bg=CARD_SECONDARY, fg=ACCENT_BLUE).pack(anchor="w")
 
         self.lbl_client_out = tk.Label(preview_box, text="Client (3): ...", font=("Consolas", 8),
                                        bg=CARD_SECONDARY, fg=TEXT_MAIN, justify="left")
-        self.lbl_client_out.pack(anchor="w", pady=(3, 1))
+        self.lbl_client_out.pack(anchor="w", pady=(4, 2))
 
         self.lbl_proj_out = tk.Label(preview_box, text="Project (3): ...", font=("Consolas", 8),
                                      bg=CARD_SECONDARY, fg=TEXT_MAIN, justify="left")
-        self.lbl_proj_out.pack(anchor="w", pady=(1, 2))
+        self.lbl_proj_out.pack(anchor="w", pady=(2, 4))
 
         # ----------------- RIGHT PANEL: DETECTED FILES & ACTIONS -----------------
-        right = tk.Frame(main_body, bg=CARD, relief="flat", padx=16, pady=14, highlightbackground=BORDER, highlightthickness=1)
+        right = tk.Frame(main_body, bg=CARD, relief="flat", padx=16, pady=16, highlightbackground=BORDER, highlightthickness=1)
         right.grid(row=0, column=1, sticky="nsew", padx=(6, 4), pady=4)
 
         # Big Drag & Drop Slot
         self.drop_slot = tk.Label(
             right,
-            text="⬇️ DRAG & DROP FOLDER OR FILES HERE\nAuto-detects ZIP, CAD & PDF + info.txt",
+            text="⬇️ DRAG & DROP FOLDER OR DRAWINGS HERE\nAuto-detects ZIP, CAD & PDF + info.txt",
             font=("Segoe UI", 9, "bold"), bg=INPUT_BG, fg=TEXT_MAIN,
             relief="flat", highlightbackground=BORDER, highlightthickness=1,
-            pady=10
+            pady=12
         )
         self.drop_slot.pack(fill="x", pady=(0, 8))
         self.drop_slot.drop_target_register(DND_FILES)
@@ -448,7 +358,7 @@ class DrawingPackagerApp:
 
         # Packaging Mode Selector
         mode_box = tk.Frame(right, bg=CARD)
-        mode_box.pack(fill="x", pady=(6, 4))
+        mode_box.pack(fill="x", pady=(6, 6))
 
         tk.Label(mode_box, text="Mode:", font=("Segoe UI", 8, "bold"), bg=CARD, fg=TEXT_MUTED).pack(side="left")
         self.mode_var = tk.StringVar(value="CAD + PDF")
@@ -461,7 +371,7 @@ class DrawingPackagerApp:
         # Big Action Button
         self.btn_generate = tk.Button(
             right, text="⚡ Generate All 6 Package Files", font=("Segoe UI", 10, "bold"),
-            bg=ACCENT, fg="white", relief="flat", pady=7,
+            bg=ACCENT, fg="white", relief="flat", pady=8,
             command=self.run_packaging
         )
         self.btn_generate.pack(fill="x", pady=(6, 4))
@@ -472,13 +382,13 @@ class DrawingPackagerApp:
         action_row.pack(fill="x")
 
         btn_open = tk.Button(action_row, text="📂 Open Output Folder", font=("Segoe UI", 8),
-                             bg=BTN_BG, fg=TEXT_MAIN, relief="flat", pady=3,
+                             bg=BTN_BG, fg=TEXT_MAIN, relief="flat", pady=4,
                              command=self.open_output)
         btn_open.pack(side="left", fill="x", expand=True, padx=(0, 3))
         self.add_hover(btn_open, BTN_BG, BTN_HOVER)
 
         btn_reset = tk.Button(action_row, text="🔄 Reset", font=("Segoe UI", 8),
-                              bg=BTN_BG, fg=TEXT_MAIN, relief="flat", pady=3,
+                              bg=BTN_BG, fg=TEXT_MAIN, relief="flat", pady=4,
                               command=self.reset_all)
         btn_reset.pack(side="right", fill="x", expand=True, padx=(3, 0))
         self.add_hover(btn_reset, BTN_BG, BTN_HOVER)
@@ -486,7 +396,7 @@ class DrawingPackagerApp:
         # Status text
         self.status_lbl = tk.Label(right, text="Ready. Drop folder or files.", font=("Segoe UI", 8),
                                    bg=CARD, fg=TEXT_MUTED)
-        self.status_lbl.pack(anchor="w", pady=(4, 0))
+        self.status_lbl.pack(anchor="w", pady=(6, 0))
 
         # ================= BOTTOM STATUS FOOTER =================
         footer = tk.Frame(self.root, bg=BG)
@@ -501,7 +411,7 @@ class DrawingPackagerApp:
 
     def create_file_card(self, parent, title, ftype):
         """Creates a modern visual status slot for ZIP, CAD, or PDF."""
-        card = tk.Frame(parent, bg=CARD_SECONDARY, relief="flat", padx=8, pady=4, highlightbackground=BORDER, highlightthickness=1)
+        card = tk.Frame(parent, bg=CARD_SECONDARY, relief="flat", padx=8, pady=5, highlightbackground=BORDER, highlightthickness=1)
         card.pack(fill="x", pady=2)
 
         lbl_title = tk.Label(card, text=title, font=("Segoe UI", 8, "bold"), bg=CARD_SECONDARY, fg=TEXT_MUTED, width=14, anchor="w")
@@ -657,74 +567,6 @@ class DrawingPackagerApp:
         if self.auto_pack_var.get() and self.client_var.get().strip() and self.files["pdf"]:
             self.root.after(150, self.run_packaging)
 
-    # ================= ERP DIALOG & LOOKUP =================
-
-    def open_erp_dialog(self):
-        """Settings dialog to link Deltek / Internal ERP project database or CSV export."""
-        win = tk.Toplevel(self.root)
-        win.title("Link Project Management Software / ERP")
-        win.geometry("520x260")
-        win.configure(bg=CARD)
-        win.transient(self.root)
-        win.grab_set()
-
-        tk.Label(win, text="LINK ERP / PROJECT REGISTER", font=("Segoe UI", 11, "bold"),
-                 bg=CARD, fg=TEXT_MAIN).pack(anchor="w", padx=16, pady=(14, 2))
-        tk.Label(win, text="Point to your ERP's exported active projects list (.csv or .json)\ne.g. from Deltek, Procore, or an internal shared network register.",
-                 font=("Segoe UI", 8), bg=CARD, fg=TEXT_MUTED, justify="left").pack(anchor="w", padx=16, pady=(0, 10))
-
-        path_var = tk.StringVar(value=self.config.get("erp_file_path", ""))
-        p_frame = tk.Frame(win, bg=CARD)
-        p_frame.pack(fill="x", padx=16, pady=4)
-
-        entry = tk.Entry(p_frame, textvariable=path_var, bg=INPUT_BG, fg=TEXT_MAIN,
-                         relief="flat", highlightbackground=BORDER, highlightthickness=1)
-        entry.pack(side="left", fill="x", expand=True, ipady=4)
-
-        def browse_erp():
-            f = filedialog.askopenfilename(filetypes=[("Project Register", "*.csv;*.json;*.sqlite"), ("All files", "*.*")])
-            if f:
-                path_var.set(f)
-
-        btn_b = tk.Button(p_frame, text="Browse", font=("Segoe UI", 8), bg=BTN_BG, fg=TEXT_MAIN,
-                          relief="flat", padx=8, command=browse_erp)
-        btn_b.pack(side="right", padx=(6, 0))
-
-        def save_erp():
-            conf = load_config()
-            conf["erp_file_path"] = path_var.get().strip()
-            save_config(conf)
-            self.config = conf
-            win.destroy()
-            messagebox.showinfo("ERP Link", "ERP Project Register linked successfully!")
-
-        btn_save = tk.Button(win, text="Save & Connect", font=("Segoe UI", 9, "bold"),
-                             bg=ACCENT_BLUE, fg="white", relief="flat", pady=5, command=save_erp)
-        btn_save.pack(fill="x", padx=16, pady=(16, 8))
-
-    def fetch_from_erp(self):
-        job = self.job_code_var.get().strip()
-        if not job:
-            messagebox.showinfo("Lookup", "Please enter a Job Number / Project Code first.")
-            return
-
-        erp_path = self.config.get("erp_file_path", "")
-        if not erp_path or not os.path.exists(erp_path):
-            if messagebox.askyesno("ERP Link Missing", "No ERP database or project register CSV is configured yet.\nWould you like to select one now?"):
-                self.open_erp_dialog()
-            return
-
-        client, proj = ERPManager.lookup_project(job, erp_path)
-        if client or proj:
-            if client:
-                self.client_var.set(client)
-            if proj:
-                self.project_var.set(proj)
-            self.update_preview()
-            self.status_lbl.config(text=f"✓ ERP match found: {client} / {proj}", fg=ACCENT)
-        else:
-            messagebox.showwarning("Not Found", f"No project found matching Job Code: '{job}' in your ERP register.")
-
     # ================= PACKAGING ENGINE =================
 
     def get_output_directory(self):
@@ -744,7 +586,6 @@ class DrawingPackagerApp:
     def reset_all(self):
         self.client_var.set("")
         self.project_var.set("")
-        self.job_code_var.set("")
         self.files = {"zip": None, "pdf": None, "dwg": None}
         self.update_file_cards()
         self.update_preview()
