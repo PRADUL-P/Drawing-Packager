@@ -291,6 +291,14 @@ class DrawingPackagerApp:
         right_header = tk.Frame(header, bg=BG)
         right_header.pack(side="right")
 
+        btn_top_txt = tk.Button(
+            right_header, text="📄 Generate info.txt", font=("Segoe UI", 8, "bold"),
+            bg=BTN_BG, fg=TEXT_MAIN, relief="flat", padx=8, pady=2,
+            command=self.generate_info_txt
+        )
+        btn_top_txt.pack(side="left", padx=(0, 10))
+        self.add_hover(btn_top_txt, BTN_BG, BTN_HOVER)
+
         self.auto_pack_var = tk.BooleanVar(value=self.config.get("auto_pack_on_drop", True))
         chk_autopack = tk.Checkbutton(
             right_header,
@@ -351,6 +359,13 @@ class DrawingPackagerApp:
                                 command=lambda: self.paste_var(self.project_var))
         btn_paste_p.pack(side="right", padx=(6, 0))
         self.add_hover(btn_paste_p, BTN_BG, BTN_HOVER)
+
+        # Quick Generate info.txt button
+        btn_gen_txt = tk.Button(left, text="📄 Generate info.txt for this Project", font=("Segoe UI", 8, "bold"),
+                                bg=CARD_SECONDARY, fg=ACCENT_BLUE, relief="flat", pady=4,
+                                command=self.generate_info_txt)
+        btn_gen_txt.pack(fill="x", pady=(0, 6))
+        self.add_hover(btn_gen_txt, CARD_SECONDARY, BTN_HOVER)
 
         # Date Option
         date_bar = tk.Frame(left, bg=CARD)
@@ -512,6 +527,35 @@ class DrawingPackagerApp:
         folder = filedialog.askdirectory(title="Select Project / Dispatch Folder")
         if folder:
             self.load_target([folder])
+
+    def generate_info_txt(self):
+        """Generates an info.txt file with current Client and Project names."""
+        client = self.client_var.get().strip()
+        project = self.project_var.get().strip()
+
+        if not client and not project:
+            messagebox.showinfo("Enter Names", "Please enter at least a Client Name or Project Name before generating info.txt.")
+            return
+
+        target_dir = self.current_folder if (self.current_folder and os.path.exists(self.current_folder)) else ""
+        if not target_dir:
+            target_dir = filedialog.askdirectory(title="Select Folder to Save info.txt (e.g. 00share)")
+
+        if target_dir and os.path.isdir(target_dir):
+            txt_path = os.path.join(target_dir, "info.txt")
+            content = f"Client: {client}\nProject: {project}\n"
+            try:
+                with open(txt_path, "w", encoding="utf-8") as f:
+                    f.write(content)
+                self.current_folder = target_dir
+                self.info_status_lbl.config(
+                    text=f"✓ info.txt generated in: {os.path.basename(target_dir)}",
+                    fg=ACCENT
+                )
+                if messagebox.askyesno("info.txt Generated", f"Successfully created info.txt in:\n{txt_path}\n\nClient: {client or '(None)'}\nProject: {project or '(None)'}\n\nOpen this file in Notepad?"):
+                    safe_open_folder(txt_path)
+            except Exception as e:
+                messagebox.showerror("Error", f"Could not create info.txt:\n{e}")
 
     def manual_browse_file(self, ftype):
         ext_map = {"zip": [("ZIP Archive", "*.zip")], "dwg": [("AutoCAD Drawing", "*.dwg")], "pdf": [("PDF Sheet", "*.pdf")]}
