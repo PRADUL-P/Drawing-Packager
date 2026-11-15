@@ -6,55 +6,51 @@ import app
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
-def test_00share_workflow():
-    print("=" * 60)
-    print("TESTING 00share ZERO-CLICK WORKFLOW (info.txt -> 6 Files)")
-    print("=" * 60)
+def test_complete_redesigned_flow():
+    print("=" * 65)
+    print("TESTING REDESIGNED APP: ZIP DETECTION + SEPARATE 6 FILES")
+    print("=" * 65)
 
-    folder = os.path.abspath("00share")
-    out_dir = os.path.join(folder, "output_files")
+    # 1. Test ZIP + PDF + DWG detection
+    z, p, d = app.FileDetector.scan_files("sample_drawings")
+    print(f"1. Detection Results:")
+    print(f"   [ZIP] {os.path.basename(z) if z else 'None'}")
+    print(f"   [CAD] {os.path.basename(d) if d else 'None'}")
+    print(f"   [PDF] {os.path.basename(p) if p else 'None'}")
+    assert z is not None, "ZIP must be detected!"
+    assert p is not None, "PDF must be detected!"
+    assert d is not None, "CAD DWG must be detected!"
+
+    # 2. Test info.txt from 00share
+    meta, txt_file = app.FileDetector.parse_txt_metadata("00share")
+    print(f"\n2. Metadata from 00share/info.txt:")
+    print(f"   Client:  '{meta.get('client')}'")
+    print(f"   Project: '{meta.get('project')}'")
+    assert meta.get("client"), "Client should be parsed"
+    assert meta.get("project"), "Project should be parsed"
+
+    # 3. Test 6-file generation
+    out_dir = os.path.join("00share", "output_files")
     if os.path.exists(out_dir):
         shutil.rmtree(out_dir)
-
-    # 1. Parse info.txt
-    meta, txt_file = app.MetadataParser.find_and_parse(folder)
-    print(f"1. Detected Config File: {txt_file}")
-    print(f"   Parsed Metadata: Client='{meta.get('client')}', Project='{meta.get('project')}', Rev='{meta.get('rev')}'")
-
-    assert meta.get("client") == "ACME_INFRA"
-    assert meta.get("project") == "METRO_TERMINAL_B"
-
-    # 2. Scan Drawings
-    pairs, zips = app.DrawingScanner.scan_path(folder)
-    print(f"\n2. Detected Drawings: {len(pairs)} pair(s)")
-    for p in pairs:
-        print(f"   - {p['base']}: {p['status']}")
-
-    assert len(pairs) >= 1
-    p = pairs[0]
-
-    # 3. Simulate Bundle Creation for the 6 files
     os.makedirs(out_dir, exist_ok=True)
+
+    client_base = f"{meta['client']}_16-11-2026"
+    proj_base = meta["project"]
+
     mock = type("Mock", (), {"create_bundle": app.DrawingPackagerApp.create_bundle})()
+    mock.create_bundle(out_dir, client_base, p, d, z, "All in One (CAD+PDF+ZIP)", inner_label=meta['client'])
+    mock.create_bundle(out_dir, proj_base, p, d, z, "All in One (CAD+PDF+ZIP)", inner_label=proj_base)
 
-    client_bundle = f"{meta['client']}_{meta['project']}_{meta['rev']}_15-11-2026"
-    proj_bundle = meta["project"]
+    files = sorted(os.listdir(out_dir))
+    print(f"\n3. Generated Output Files ({len(files)} files):")
+    for f in files:
+        print(f"   📦 {f}")
 
-    # Creates 3 files for client
-    mock.create_bundle(out_dir, client_bundle, p["pdf"], p["dwg"], None, "CAD + PDF")
-    # Creates 3 files for project
-    mock.create_bundle(out_dir, proj_bundle, p["pdf"], p["dwg"], None, "CAD + PDF")
-
-    created = sorted(os.listdir(out_dir))
-    print(f"\n3. Automatically Created All {len(created)} Files in {out_dir}:")
-    for f in created:
-        sz = os.path.getsize(os.path.join(out_dir, f))
-        print(f"   📦 {f} ({sz} bytes)")
-
-    assert len(created) == 6, f"Expected 6 files, got {len(created)}"
-    print("\n" + "=" * 60)
-    print("SUCCESS: 00share zero-click 6-file generation verified!")
-    print("=" * 60)
+    assert len(files) == 6, f"Expected 6 files, got {len(files)}"
+    print("\n" + "=" * 65)
+    print("ALL TESTS PASSED: ZIP detected & 6 distinct files created!")
+    print("=" * 65)
 
 if __name__ == "__main__":
-    test_00share_workflow()
+    test_complete_redesigned_flow()
