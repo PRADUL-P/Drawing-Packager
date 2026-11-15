@@ -3,6 +3,7 @@ import sys
 import shutil
 import zipfile
 import json
+import re
 from datetime import datetime
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
@@ -14,17 +15,17 @@ APP_NAME = "LUDARP Drawing Packager"
 APP_VERSION = "v2.0"
 
 # Modern Slate / Linear Dark Palette
-BG = "#0d1117"          # Outer window background
-CARD = "#161b22"        # Main container cards
-CARD_SECONDARY = "#21262d" # Inner slots / item cards
-INPUT_BG = "#0d1117"    # Input background
-TEXT_MAIN = "#f0f6fc"   # High contrast main text
-TEXT_MUTED = "#8b949e"  # Subtle labels
-ACCENT = "#238636"      # Success / Action green
-ACCENT_BLUE = "#1f6feb" # Focus / Primary blue
-ACCENT_HOVER = "#2ea043"# Button hover
-ACCENT_WARN = "#d29922" # Warning gold
-BORDER = "#30363d"      # Subtle divider borders
+BG = "#0d1117"             # Outer window background
+CARD = "#161b22"           # Main container cards
+CARD_SECONDARY = "#21262d"    # Inner slots / item cards
+INPUT_BG = "#0d1117"       # Input background
+TEXT_MAIN = "#f0f6fc"      # High contrast main text
+TEXT_MUTED = "#8b949e"     # Subtle labels
+ACCENT = "#238636"         # Success / Action green
+ACCENT_BLUE = "#1f6feb"    # Focus / Primary blue
+ACCENT_HOVER = "#2ea043"   # Button hover
+ACCENT_WARN = "#d29922"    # Warning gold
+BORDER = "#30363d"         # Subtle divider borders
 BTN_BG = "#21262d"
 BTN_HOVER = "#30363d"
 
@@ -67,6 +68,20 @@ def save_config(config_data):
         pass
 
 
+def add_to_recent(key, value):
+    """Store recent values without duplicates, max 15 entries."""
+    if not value or not value.strip():
+        return
+    value = value.strip()
+    config = load_config()
+    items = config.get(key, [])
+    if value in items:
+        items.remove(value)
+    items.insert(0, value)
+    config[key] = items[:15]
+    save_config(config)
+
+
 def sanitize_filename(name):
     if not name:
         return ""
@@ -88,7 +103,36 @@ def format_size(bytes_size):
 
 def safe_open_folder(path):
     if path and os.path.exists(path):
-        os.startfile(path)
+        try:
+            os.startfile(path)
+        except Exception:
+            pass
+
+
+def parse_dnd_paths(data):
+    """Robust parser for TkinterDnD data that handles paths with spaces (e.g. 'Drawing packer')."""
+    if not data:
+        return []
+
+    # If entire string points to an existing file/folder, return it
+    clean_full = data.strip('{}').strip()
+    if os.path.exists(clean_full):
+        return [os.path.normpath(clean_full)]
+
+    paths = []
+    # Match braced paths like {E:/Drawing packer/file.dwg} OR non-whitespace
+    matches = re.findall(r'\{([^}]+)\}|(\S+)', data)
+    for m in matches:
+        p = m[0] if m[0] else m[1]
+        p = p.strip('{}').strip()
+        if p and os.path.exists(p):
+            paths.append(os.path.normpath(p))
+
+    # Fallback check
+    if not paths and os.path.exists(data.strip()):
+        return [os.path.normpath(data.strip())]
+
+    return paths
 
 
 # ================= METADATA & FILE DETECTOR =================
@@ -162,7 +206,11 @@ class FileDetector:
         """Finds any DWG, PDF, and ZIP files in the target folder or list."""
         all_paths = []
         if isinstance(target, list):
-            all_paths = target
+            for item in target:
+                if os.path.isdir(item):
+                    all_paths.extend([os.path.join(item, f) for f in os.listdir(item) if os.path.isfile(os.path.join(item, f))])
+                elif os.path.isfile(item):
+                    all_paths.append(item)
         elif os.path.isdir(target):
             all_paths = [os.path.join(target, f) for f in os.listdir(target) if os.path.isfile(os.path.join(target, f))]
         elif os.path.isfile(target):
@@ -190,8 +238,8 @@ class DrawingPackagerApp:
     def __init__(self, root):
         self.root = root
         self.root.title(f"{APP_NAME} {APP_VERSION}")
-        self.root.geometry("880x540")
-        self.root.minsize(820, 500)
+        self.root.geometry("880x560")
+        self.root.minsize(820, 520)
         self.root.configure(bg=BG)
 
         icon_path = resource_path("zip-folder.ico")
@@ -339,17 +387,27 @@ class DrawingPackagerApp:
         right = tk.Frame(main_body, bg=CARD, relief="flat", padx=16, pady=16, highlightbackground=BORDER, highlightthickness=1)
         right.grid(row=0, column=1, sticky="nsew", padx=(6, 4), pady=4)
 
-        # Big Drag & Drop Slot
+        # Big Drag & Drop Slot with Choose Folder Button
+        drop_container = tk.Frame(right, bg=INPUT_BG, highlightbackground=BORDER, highlightthickness=1)
+        drop_container.pack(fill="x", pady=(0, 8))
+
         self.drop_slot = tk.Label(
-            right,
-            text="⬇️ DRAG & DROP FOLDER OR DRAWINGS HERE\nAuto-detects ZIP, CAD & PDF + info.txt",
+            drop_container,
+            text="⬇️ DRAG & DROP FOLDER (e.g. 00share) OR FILES HERE",
             font=("Segoe UI", 9, "bold"), bg=INPUT_BG, fg=TEXT_MAIN,
-            relief="flat", highlightbackground=BORDER, highlightthickness=1,
-            pady=12
+            pady=8
         )
-        self.drop_slot.pack(fill="x", pady=(0, 8))
+        self.drop_slot.pack(fill="x")
         self.drop_slot.drop_target_register(DND_FILES)
         self.drop_slot.dnd_bind("<<Drop>>", self.handle_drop)
+
+        btn_choose_folder = tk.Button(
+            drop_container, text="📁 Or Select Folder...", font=("Segoe UI", 8, "bold"),
+            bg=BTN_BG, fg=ACCENT_BLUE, relief="flat", padx=10, pady=3,
+            command=self.browse_folder
+        )
+        btn_choose_folder.pack(pady=(0, 6))
+        self.add_hover(btn_choose_folder, BTN_BG, BTN_HOVER)
 
         # THREE VISUAL FILE SLOTS (ZIP, CAD, PDF)
         self.zip_card = self.create_file_card(right, "📦 ZIP ARCHIVE", "zip")
@@ -450,11 +508,18 @@ class DrawingPackagerApp:
         except Exception:
             pass
 
+    def browse_folder(self):
+        folder = filedialog.askdirectory(title="Select Project / Dispatch Folder")
+        if folder:
+            self.load_target([folder])
+
     def manual_browse_file(self, ftype):
         ext_map = {"zip": [("ZIP Archive", "*.zip")], "dwg": [("AutoCAD Drawing", "*.dwg")], "pdf": [("PDF Sheet", "*.pdf")]}
         path = filedialog.askopenfilename(filetypes=ext_map.get(ftype, [("All files", "*.*")]))
         if path:
-            self.files[ftype] = path
+            self.files[ftype] = os.path.normpath(path)
+            if not self.current_folder:
+                self.current_folder = os.path.dirname(path)
             self.update_file_cards()
             self.update_preview()
 
@@ -517,18 +582,19 @@ class DrawingPackagerApp:
     # ================= DRAG & DROP HANDLER =================
 
     def handle_drop(self, event):
-        raw_paths = self.root.tk.splitlist(event.data)
-        clean_paths = [p.strip("{}").strip() for p in raw_paths if p.strip("{}").strip()]
+        clean_paths = parse_dnd_paths(event.data)
         if not clean_paths:
             return
+        self.load_target(clean_paths)
 
-        target = clean_paths[0] if (len(clean_paths) == 1 and os.path.isdir(clean_paths[0])) else clean_paths
-
+    def load_target(self, clean_paths):
         # Determine folder context
-        if isinstance(target, str) and os.path.isdir(target):
-            self.current_folder = target
+        if len(clean_paths) == 1 and os.path.isdir(clean_paths[0]):
+            self.current_folder = clean_paths[0]
+            target = clean_paths[0]
         else:
             self.current_folder = os.path.dirname(clean_paths[0])
+            target = clean_paths
 
         # 1. Parse info.txt from folder if present
         meta, txt_path = FileDetector.parse_txt_metadata(target)
@@ -538,7 +604,7 @@ class DrawingPackagerApp:
             if meta.get("project"):
                 self.project_var.set(meta["project"])
             self.info_status_lbl.config(
-                text=f"✓ Config loaded: {os.path.basename(txt_path)}",
+                text=f"✓ Config loaded from: {os.path.basename(txt_path)}",
                 fg=ACCENT
             )
         else:
@@ -559,13 +625,13 @@ class DrawingPackagerApp:
         self.update_file_cards()
         self.update_preview()
 
-        # Feedback
         loaded = [k.upper() for k, v in self.files.items() if v]
         self.status_lbl.config(text=f"Loaded: {', '.join(loaded) if loaded else 'None'}", fg=ACCENT)
 
         # ⚡ ZERO-CLICK AUTO-PACK: if enabled and client + drawing are present
         if self.auto_pack_var.get() and self.client_var.get().strip() and self.files["pdf"]:
-            self.root.after(150, self.run_packaging)
+            self.root.update_idletasks()
+            self.run_packaging()
 
     # ================= PACKAGING ENGINE =================
 
