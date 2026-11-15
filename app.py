@@ -3,6 +3,7 @@ import sys
 import shutil
 import zipfile
 import json
+import re
 from datetime import datetime
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
@@ -50,7 +51,8 @@ def load_config():
         "separator": "_",
         "date_format": "%d-%m-%Y",
         "include_date": True,
-        "include_rev": True
+        "include_rev": True,
+        "auto_pack_on_drop": True
     }
     if os.path.exists(CONFIG_FILE):
         try:
@@ -110,14 +112,100 @@ def safe_open_folder(path):
         os.startfile(path)
 
 
-# ================= DRAWING SCANNER & PAIRING =================
+# ================= DRAWING SCANNER & TEXT CONFIG PARSER =================
+
+class MetadataParser:
+    """Parses client/project format from txt file (e.g. info.txt, client.txt, or lines)."""
+
+    @staticmethod
+    def parse_txt_content(content):
+        lines = [line.strip() for line in content.splitlines() if line.strip() and not line.strip().startswith("#")]
+        meta = {}
+        for line in lines:
+            if ":" in line:
+                k, v = line.split(":", 1)
+                meta[k.strip().lower()] = v.strip()
+            elif "=" in line:
+                k, v = line.split("=", 1)
+                meta[k.strip().lower()] = v.strip()
+
+        # Positional fallback if no key:value found
+        if "client" not in meta and "client_name" not in meta and len(lines) >= 1:
+            meta["client"] = lines[0]
+        if "project" not in meta and "project_name" not in meta and len(lines) >= 2:
+            meta["project"] = lines[1]
+        if "rev" not in meta and "revision" not in meta and len(lines) >= 3:
+            meta["rev"] = lines[2]
+
+        # Standardize keys
+        client = meta.get("client") or meta.get("client_name") or meta.get("client name") or ""
+        project = meta.get("project") or meta.get("project_name") or meta.get("project name") or ""
+        rev = meta.get("rev") or meta.get("revision") or ""
+        pattern = meta.get("pattern") or meta.get("format") or ""
+        sep = meta.get("separator") or meta.get("sep") or ""
+
+        return {
+            "client": client,
+            "project": project,
+            "rev": rev,
+            "pattern": pattern,
+            "sep": sep
+        }
+
+    @staticmethod
+    def find_and_parse(target_path):
+        """Scans folder or dropped files for a .txt config file."""
+        folder = None
+        txt_candidates = []
+
+        if isinstance(target_path, list):
+            for p in target_path:
+                if p.lower().endswith(".txt") and os.path.isfile(p):
+                    txt_candidates.append(p)
+                elif os.path.isfile(p):
+                    folder = os.path.dirname(p)
+                elif os.path.isdir(p):
+                    folder = p
+        elif os.path.isdir(target_path):
+            folder = target_path
+        elif os.path.isfile(target_path):
+            folder = os.path.dirname(target_path)
+
+        if folder and os.path.isdir(folder):
+            for fname in os.listdir(folder):
+                if fname.lower().endswith(".txt"):
+                    txt_candidates.append(os.path.join(folder, fname))
+
+        # Prioritize preferred names
+        preferred = ["info.txt", "client.txt", "project.txt", "naming.txt", "format.txt", "00share.txt", "config.txt"]
+        chosen = None
+        for pref in preferred:
+            for c in txt_candidates:
+                if os.path.basename(c).lower() == pref:
+                    chosen = c
+                    break
+            if chosen:
+                break
+
+        if not chosen and txt_candidates:
+            chosen = txt_candidates[0]
+
+        if chosen and os.path.exists(chosen):
+            try:
+                with open(chosen, "r", encoding="utf-8") as f:
+                    content = f.read()
+                return MetadataParser.parse_txt_content(content), chosen
+            except Exception:
+                pass
+
+        return {}, None
+
 
 class DrawingScanner:
     """Detects, matches and pairs CAD (.dwg), PDF (.pdf), and archive (.zip) files."""
 
     @staticmethod
     def scan_path(target_path):
-        """Scans a directory or a list of files and pairs drawings by base name."""
         files = []
         if isinstance(target_path, list):
             files = [p for p in target_path if os.path.isfile(p)]
@@ -141,11 +229,10 @@ class DrawingScanner:
             elif ext == ".dwg":
                 dwgs[norm_key] = p
 
-        # Pair matching
         all_keys = sorted(list(set(list(pdfs.keys()) + list(dwgs.keys()))))
         pairs = []
 
-        # If there is only 1 pdf and 1 dwg with different names, allow pairing them
+        # If only 1 pdf and 1 dwg with different names, pair them together
         if len(pdfs) == 1 and len(dwgs) == 1 and len(all_keys) > 1:
             p_file = list(pdfs.values())[0]
             d_file = list(dwgs.values())[0]
@@ -184,7 +271,7 @@ class DrawingPackagerApp:
     def __init__(self, root):
         self.root = root
         self.root.title(f"{APP_NAME} {APP_VERSION}")
-        self.root.geometry("980x660")
+        self.root.geometry("980x670")
         self.root.minsize(860, 580)
         self.root.configure(bg=BG)
 
@@ -199,7 +286,7 @@ class DrawingPackagerApp:
         self.config = load_config()
         self.detected_pairs = []
         self.detected_zips = []
-        self.manual_files = {"zip": None, "pdf": None, "dwg": None}
+        self.current_txt_file = None
 
         self.setup_styles()
         self.build_ui()
@@ -225,7 +312,6 @@ class DrawingPackagerApp:
         except Exception:
             pass
 
-        # Progressbar styling
         self.style.configure(
             "Packager.Horizontal.TProgressbar",
             troughcolor=INPUT_BG,
@@ -236,7 +322,6 @@ class DrawingPackagerApp:
             thickness=6
         )
 
-        # Combobox dark style
         self.style.configure(
             "Dark.TCombobox",
             fieldbackground=INPUT_BG,
@@ -250,35 +335,63 @@ class DrawingPackagerApp:
         self.style.map("Dark.TCombobox", fieldbackground=[("readonly", INPUT_BG)])
 
     def build_ui(self):
-        # Grid config
+        # Register entire window as a drag & drop target!
+        self.root.drop_target_register(DND_FILES)
+        self.root.dnd_bind("<<Drop>>", self.handle_drop)
+
+        # Top Bar: Auto-Pack Toggle & Quick Info
+        top_bar = tk.Frame(self.root, bg=CARD_INNER, padx=12, pady=6)
+        top_bar.grid(row=0, column=0, columnspan=2, sticky="ew", padx=12, pady=(10, 4))
+
+        self.auto_pack_var = tk.BooleanVar(value=self.config.get("auto_pack_on_drop", True))
+        chk_autopack = tk.Checkbutton(
+            top_bar,
+            text="⚡ Auto-Pack on Drop (Auto-reads info.txt & creates all 6 files immediately)",
+            variable=self.auto_pack_var,
+            font=("Segoe UI", 9, "bold"),
+            bg=CARD_INNER, fg=ACCENT_GREEN, selectcolor=INPUT_BG,
+            activebackground=CARD_INNER,
+            command=self.save_autopack_pref
+        )
+        chk_autopack.pack(side="left")
+
+        btn_new_txt = tk.Button(
+            top_bar, text="📄 Create info.txt in Folder", font=("Segoe UI", 8),
+            bg=BTN_DARK, fg="white", relief="flat", padx=8, pady=2,
+            command=self.create_info_txt_dialog
+        )
+        btn_new_txt.pack(side="right")
+        self.add_hover_effect(btn_new_txt, BTN_DARK, BTN_HOVER)
+
+        # Main Layout: 2 Columns
         self.root.grid_columnconfigure(0, weight=1, minsize=420)
         self.root.grid_columnconfigure(1, weight=1, minsize=460)
-        self.root.grid_rowconfigure(0, weight=1)
-        self.root.grid_rowconfigure(1, weight=0)
+        self.root.grid_rowconfigure(1, weight=1)
+        self.root.grid_rowconfigure(2, weight=0)
 
         # ================= LEFT PANEL: METADATA & NAMING =================
         left_panel = tk.Frame(self.root, bg=CARD, relief="flat", padx=14, pady=12)
-        left_panel.grid(row=0, column=0, sticky="nsew", padx=(12, 6), pady=(12, 6))
+        left_panel.grid(row=1, column=0, sticky="nsew", padx=(12, 6), pady=(4, 6))
 
-        # Header Title
         title_box = tk.Frame(left_panel, bg=CARD)
-        title_box.pack(fill="x", pady=(0, 10))
+        title_box.pack(fill="x", pady=(0, 6))
 
-        tk.Label(title_box, text="🧩 LUDARP Drawing Packager", font=("Segoe UI", 14, "bold"),
+        tk.Label(title_box, text="🧩 LUDARP Drawing Packager", font=("Segoe UI", 13, "bold"),
                  bg=CARD, fg=TEXT_PRIMARY).pack(side="left")
         ver_lbl = tk.Label(title_box, text=f" {APP_VERSION} ", font=("Segoe UI", 9, "bold"),
                            bg=ACCENT, fg="white", padx=4, pady=1)
         ver_lbl.pack(side="left", padx=8)
 
-        tk.Label(left_panel, text="Automate CAD + PDF + ZIP bundling with civil engineering standards.",
-                 font=("Segoe UI", 8), bg=CARD, fg=TEXT_MUTED).pack(anchor="w", pady=(0, 10))
+        self.txt_status_lbl = tk.Label(left_panel, text="Drop a folder with info.txt or drawings to auto-fill",
+                                       font=("Segoe UI", 8, "italic"), bg=CARD, fg=TEXT_MUTED)
+        self.txt_status_lbl.pack(anchor="w", pady=(0, 8))
 
         # Client Name Section
         self.create_field_label(left_panel, "Client Name", required=True)
         client_box = tk.Frame(left_panel, bg=CARD)
-        client_box.pack(fill="x", pady=(2, 8))
+        client_box.pack(fill="x", pady=(2, 6))
 
-        self.client_var = tk.StringVar()
+        self.client_var = tk.StringVar(value=self.config.get("recent_clients", [""])[0] if self.config.get("recent_clients") else "")
         recent_clients = self.config.get("recent_clients", [])
         self.client_combo = ttk.Combobox(client_box, textvariable=self.client_var,
                                          values=recent_clients, style="Dark.TCombobox")
@@ -292,9 +405,9 @@ class DrawingPackagerApp:
         # Project Name Section
         self.create_field_label(left_panel, "Project Name", hint="(optional - defaults to drawing name)")
         project_box = tk.Frame(left_panel, bg=CARD)
-        project_box.pack(fill="x", pady=(2, 8))
+        project_box.pack(fill="x", pady=(2, 6))
 
-        self.project_var = tk.StringVar()
+        self.project_var = tk.StringVar(value=self.config.get("recent_projects", [""])[0] if self.config.get("recent_projects") else "")
         recent_projects = self.config.get("recent_projects", [])
         self.project_combo = ttk.Combobox(project_box, textvariable=self.project_var,
                                           values=recent_projects, style="Dark.TCombobox")
@@ -327,20 +440,18 @@ class DrawingPackagerApp:
         self.rev_combo.pack(side="left", ipady=4)
         self.rev_var.trace_add("write", lambda *args: self.update_live_preview())
 
-        # Quick revision preset buttons
         preset_frame = tk.Frame(rev_box, bg=CARD)
         preset_frame.pack(side="left", padx=8)
         for preset in ["R00", "R01", "REV-A", "P1", "C1"]:
             btn = tk.Button(preset_frame, text=preset, font=("Segoe UI", 8),
                             bg=CARD_INNER, fg=TEXT_PRIMARY, relief="flat", padx=4, pady=1,
-                            activebackground=ACCENT, activeforeground="white",
                             command=lambda p=preset: self.set_revision(p))
             btn.pack(side="left", padx=2)
             self.add_hover_effect(btn, CARD_INNER, BTN_HOVER)
 
         # Date Section
         date_header = tk.Frame(left_panel, bg=CARD)
-        date_header.pack(fill="x", pady=(6, 2))
+        date_header.pack(fill="x", pady=(4, 2))
         tk.Label(date_header, text="Date", font=("Segoe UI", 9, "bold"),
                  bg=CARD, fg=TEXT_MUTED).pack(side="left")
 
@@ -351,18 +462,17 @@ class DrawingPackagerApp:
         chk_date.pack(side="right")
 
         date_box = tk.Frame(left_panel, bg=CARD)
-        date_box.pack(fill="x", pady=(2, 8))
+        date_box.pack(fill="x", pady=(2, 6))
 
         self.date_picker = DateEntry(date_box, date_pattern="dd-mm-yyyy",
-                                     background=ACCENT, foreground="white",
-                                     borderwidth=0)
+                                     background=ACCENT, foreground="white", borderwidth=0)
         self.date_picker.pack(side="left", fill="x", expand=True)
         self.date_picker.bind("<<DateEntrySelected>>", lambda e: self.update_live_preview())
 
-        # Naming Pattern / Rule
+        # Naming Pattern
         self.create_field_label(left_panel, "Naming Template")
         pattern_box = tk.Frame(left_panel, bg=CARD)
-        pattern_box.pack(fill="x", pady=(2, 6))
+        pattern_box.pack(fill="x", pady=(2, 4))
 
         self.pattern_var = tk.StringVar(value=self.config.get("naming_pattern", "Client_Project_Rev_Date"))
         pattern_options = [
@@ -378,31 +488,30 @@ class DrawingPackagerApp:
         self.pattern_menu["menu"].config(bg=INPUT_BG, fg=TEXT_PRIMARY)
         self.pattern_menu.pack(side="left", fill="x", expand=True)
 
-        # Separator choice
         sep_box = tk.Frame(pattern_box, bg=CARD)
         sep_box.pack(side="right", padx=(8, 0))
         tk.Label(sep_box, text="Sep:", bg=CARD, fg=TEXT_MUTED, font=("Segoe UI", 8)).pack(side="left")
         self.sep_var = tk.StringVar(value=self.config.get("separator", "_"))
         for s in ["_", "-", " "]:
-            rb = tk.Radiobutton(sep_box, text=repr(s)[1:-1] if s != " " else "space",
+            rb = tk.Radiobutton(sep_box, text=repr(s)[1:-1] if s != " " else "spc",
                                 variable=self.sep_var, value=s,
                                 bg=CARD, fg=TEXT_PRIMARY, selectcolor=INPUT_BG,
                                 activebackground=CARD, font=("Segoe UI", 8),
                                 command=self.update_live_preview)
-            rb.pack(side="left", padx=2)
+            rb.pack(side="left", padx=1)
 
         # Live Filename Preview Card
         preview_card = tk.Frame(left_panel, bg=CARD_INNER, relief="flat", padx=10, pady=8)
-        preview_card.pack(fill="x", pady=(10, 0))
+        preview_card.pack(fill="x", pady=(8, 0))
 
-        tk.Label(preview_card, text="📄 Live Filename Preview", font=("Segoe UI", 8, "bold"),
+        tk.Label(preview_card, text="📄 Target 6-File Outputs Preview:", font=("Segoe UI", 8, "bold"),
                  bg=CARD_INNER, fg=ACCENT).pack(anchor="w")
 
-        self.preview_lbl = tk.Label(preview_card, text="...", font=("Segoe UI", 9, "italic"),
-                                    bg=CARD_INNER, fg=TEXT_PRIMARY, wraplength=380, justify="left")
+        self.preview_lbl = tk.Label(preview_card, text="...", font=("Segoe UI", 8),
+                                    bg=CARD_INNER, fg=TEXT_PRIMARY, justify="left")
         self.preview_lbl.pack(anchor="w", pady=(2, 4))
 
-        btn_copy_name = tk.Button(preview_card, text="📋 Copy Generated Name", font=("Segoe UI", 8),
+        btn_copy_name = tk.Button(preview_card, text="📋 Copy Base Name", font=("Segoe UI", 8),
                                   bg=BTN_DARK, fg="white", relief="flat", padx=6, pady=2,
                                   command=self.copy_preview_name)
         btn_copy_name.pack(anchor="e")
@@ -410,42 +519,42 @@ class DrawingPackagerApp:
 
         # ================= RIGHT PANEL: FILES & BATCH PACKAGING =================
         right_panel = tk.Frame(self.root, bg=CARD, relief="flat", padx=14, pady=12)
-        right_panel.grid(row=0, column=1, sticky="nsew", padx=(6, 12), pady=(12, 6))
+        right_panel.grid(row=1, column=1, sticky="nsew", padx=(6, 12), pady=(4, 6))
 
-        # Input Folder
-        self.create_field_label(right_panel, "Input Folder")
+        # Folder Paths
+        self.create_field_label(right_panel, "Input / Output Folders")
         in_frame = tk.Frame(right_panel, bg=CARD)
-        in_frame.pack(fill="x", pady=(2, 6))
+        in_frame.pack(fill="x", pady=(2, 4))
 
         self.input_var = tk.StringVar()
         tk.Entry(in_frame, textvariable=self.input_var, bg=INPUT_BG, fg=TEXT_PRIMARY,
-                 relief="flat").pack(side="left", fill="x", expand=True, ipady=4)
-        btn_browse_in = self.create_button(in_frame, "Browse", self.browse_input, width=8)
-        btn_browse_in.pack(side="right", padx=(6, 0))
+                 relief="flat").pack(side="left", fill="x", expand=True, ipady=3)
+        btn_browse_in = self.create_button(in_frame, "Input", self.browse_input, width=6)
+        btn_browse_in.pack(side="right", padx=(4, 0))
 
-        # Output Folder
-        self.create_field_label(right_panel, "Output Folder", hint="(auto creates /output_files if empty)")
         out_frame = tk.Frame(right_panel, bg=CARD)
         out_frame.pack(fill="x", pady=(2, 6))
 
         self.output_var = tk.StringVar()
         tk.Entry(out_frame, textvariable=self.output_var, bg=INPUT_BG, fg=TEXT_PRIMARY,
-                 relief="flat").pack(side="left", fill="x", expand=True, ipady=4)
-        btn_browse_out = self.create_button(out_frame, "Browse", self.browse_output, width=8)
-        btn_browse_out.pack(side="right", padx=(6, 0))
+                 relief="flat").pack(side="left", fill="x", expand=True, ipady=3)
+        btn_browse_out = self.create_button(out_frame, "Output", self.browse_output, width=6)
+        btn_browse_out.pack(side="right", padx=(4, 0))
 
-        # Drag & Drop Zone
-        self.drop_area = tk.Label(right_panel,
-                                  text="⬇️ Drag & Drop Folder or Files Here (DWG, PDF, ZIP)\nAuto-detects matching drawing pairs",
-                                  font=("Segoe UI", 9), bg=INPUT_BG, fg=TEXT_PRIMARY,
-                                  relief="groove", bd=1, pady=10)
-        self.drop_area.pack(fill="x", pady=(6, 6))
+        # Big Drag & Drop Zone
+        self.drop_area = tk.Label(
+            right_panel,
+            text="⬇️ DRAG & DROP FOLDER OR DRAWINGS ANYWHERE\nReads info.txt & creates all 6 files automatically",
+            font=("Segoe UI", 9, "bold"), bg=INPUT_BG, fg=ACCENT,
+            relief="groove", bd=1, pady=12
+        )
+        self.drop_area.pack(fill="x", pady=(4, 6))
         self.drop_area.drop_target_register(DND_FILES)
         self.drop_area.dnd_bind("<<Drop>>", self.handle_drop)
 
         # Mode Selector
         mode_frame = tk.Frame(right_panel, bg=CARD)
-        mode_frame.pack(fill="x", pady=(4, 4))
+        mode_frame.pack(fill="x", pady=(2, 4))
 
         tk.Label(mode_frame, text="Packaging Mode:", font=("Segoe UI", 9, "bold"),
                  bg=CARD, fg=TEXT_MUTED).pack(side="left")
@@ -457,7 +566,7 @@ class DrawingPackagerApp:
         self.mode_menu["menu"].config(bg=INPUT_BG, fg=TEXT_PRIMARY)
         self.mode_menu.pack(side="right", fill="x", expand=True, padx=(8, 0))
 
-        # File List / Batch Detection View
+        # Detected Drawings Header
         list_header = tk.Frame(right_panel, bg=CARD)
         list_header.pack(fill="x", pady=(4, 2))
 
@@ -492,7 +601,7 @@ class DrawingPackagerApp:
         self.progress_bar.pack(fill="x", pady=(2, 2))
 
         # Status text
-        self.status_lbl = tk.Label(right_panel, text="Ready. Choose a folder or drop files.",
+        self.status_lbl = tk.Label(right_panel, text="Ready. Drag & drop files or folder.",
                                    font=("Segoe UI", 8), bg=CARD, fg=TEXT_MUTED)
         self.status_lbl.pack(anchor="w", pady=(0, 4))
 
@@ -500,7 +609,7 @@ class DrawingPackagerApp:
         btn_action_frame = tk.Frame(right_panel, bg=CARD)
         btn_action_frame.pack(fill="x", pady=(2, 0))
 
-        self.btn_run = tk.Button(btn_action_frame, text="⚡ Generate Packages", font=("Segoe UI", 10, "bold"),
+        self.btn_run = tk.Button(btn_action_frame, text="⚡ Generate 6 Package Files", font=("Segoe UI", 10, "bold"),
                                  bg=ACCENT, fg="white", relief="flat", pady=6,
                                  activebackground=ACCENT_HOVER, activeforeground="white",
                                  command=self.run_packaging)
@@ -516,7 +625,7 @@ class DrawingPackagerApp:
         btn_open.pack(side="left", fill="x", expand=True, padx=(0, 2))
         self.add_hover_effect(btn_open, BTN_DARK, BTN_HOVER)
 
-        btn_reset = tk.Button(sub_btns, text="🔄 Reset All", font=("Segoe UI", 8),
+        btn_reset = tk.Button(sub_btns, text="🔄 Reset", font=("Segoe UI", 8),
                               bg=BTN_DARK, fg="white", relief="flat", pady=4,
                               command=self.reset_all)
         btn_reset.pack(side="right", fill="x", expand=True, padx=(2, 0))
@@ -524,18 +633,18 @@ class DrawingPackagerApp:
 
         # ================= FOOTER =================
         footer = tk.Frame(self.root, bg=BG)
-        footer.grid(row=1, column=0, columnspan=2, sticky="ew", padx=12, pady=(2, 6))
+        footer.grid(row=2, column=0, columnspan=2, sticky="ew", padx=12, pady=(2, 6))
 
-        tk.Label(footer, text=f"{APP_NAME} {APP_VERSION} | Created for Civil & Structural Engineering Automation",
+        tk.Label(footer, text=f"{APP_NAME} {APP_VERSION} | Drop to Auto-Pack 6 Files | Pradul P",
                  font=("Segoe UI", 8), bg=BG, fg=TEXT_MUTED).pack(side="left")
-        tk.Label(footer, text="Author: Pradul P", font=("Segoe UI", 8),
+        tk.Label(footer, text="Press <Enter> to Generate", font=("Segoe UI", 8),
                  bg=BG, fg=TEXT_MUTED).pack(side="right")
 
     # ================= HELPER UI CREATION =================
 
     def create_field_label(self, parent, text, required=False, hint=""):
         f = tk.Frame(parent, bg=CARD)
-        f.pack(fill="x", pady=(4, 0))
+        f.pack(fill="x", pady=(3, 0))
         lbl = tk.Label(f, text=text, font=("Segoe UI", 9, "bold"), bg=CARD, fg=TEXT_MUTED)
         lbl.pack(side="left")
         if required:
@@ -559,6 +668,12 @@ class DrawingPackagerApp:
         self.sep_var.trace_add("write", lambda *args: self.update_live_preview())
         self.include_rev_var.trace_add("write", lambda *args: self.update_live_preview())
         self.include_date_var.trace_add("write", lambda *args: self.update_live_preview())
+        self.root.bind("<Return>", lambda e: self.run_packaging())
+
+    def save_autopack_pref(self):
+        conf = load_config()
+        conf["auto_pack_on_drop"] = self.auto_pack_var.get()
+        save_config(conf)
 
     # ================= EVENT HANDLERS & LOGIC =================
 
@@ -577,11 +692,11 @@ class DrawingPackagerApp:
             pass
 
     def copy_preview_name(self):
-        preview = self.preview_lbl.cget("text")
-        if preview and preview != "...":
+        preview = self.compute_base_name()
+        if preview:
             self.root.clipboard_clear()
             self.root.clipboard_append(preview)
-            self.status_lbl.config(text="Copied preview name to clipboard! 📋", fg=ACCENT_GREEN)
+            self.status_lbl.config(text="Copied base name to clipboard! 📋", fg=ACCENT_GREEN)
 
     def compute_base_name(self, drawing_name=""):
         client = sanitize_filename(self.client_var.get().strip()) or "CLIENT"
@@ -600,8 +715,6 @@ class DrawingPackagerApp:
             rev_str = sanitize_filename(self.rev_var.get().strip())
 
         pattern = self.pattern_var.get()
-        tokens = []
-
         if pattern == "Client_Project_Rev_Date":
             tokens = [t for t in [client, project, rev_str, date_str] if t]
         elif pattern == "Client_Rev_Date":
@@ -616,20 +729,45 @@ class DrawingPackagerApp:
         return sep.join(tokens)
 
     def update_live_preview(self):
-        example_drawing = self.detected_pairs[0]["base"] if self.detected_pairs else "Ground_Floor_Plan"
-        base = self.compute_base_name(example_drawing)
-        self.preview_lbl.config(text=f"{base}.zip")
+        example_drawing = self.detected_pairs[0]["base"] if self.detected_pairs else "Drawing"
+        client_base = self.compute_base_name(example_drawing)
+        proj_base = sanitize_filename(self.project_var.get().strip()) or example_drawing
+
+        self.preview_lbl.config(
+            text=f"1-3. Client:  {client_base}.(pdf / dwg / zip)\n4-6. Project: {proj_base}.(pdf / dwg / zip)"
+        )
 
     def browse_input(self):
         folder = filedialog.askdirectory()
         if folder:
             self.input_var.set(folder)
-            self.process_incoming_path(folder)
+            self.process_incoming_path(folder, auto_run_if_ready=False)
 
     def browse_output(self):
         folder = filedialog.askdirectory()
         if folder:
             self.output_var.set(folder)
+
+    def create_info_txt_dialog(self):
+        """Prompt to create a template info.txt in the chosen folder."""
+        folder = self.input_var.get().strip()
+        if not folder or not os.path.exists(folder):
+            folder = filedialog.askdirectory(title="Select Project / 00share Folder to Create info.txt")
+
+        if folder and os.path.isdir(folder):
+            txt_path = os.path.join(folder, "info.txt")
+            client_def = self.client_var.get().strip() or "CLIENT NAME"
+            proj_def = self.project_var.get().strip() or "PROJECT NAME"
+            rev_def = self.rev_var.get().strip() or "R01"
+
+            sample_content = f"Client: {client_def}\nProject: {proj_def}\nRevision: {rev_def}\nFormat: Client_Project_Rev_Date\n"
+            try:
+                with open(txt_path, "w", encoding="utf-8") as f:
+                    f.write(sample_content)
+                self.txt_status_lbl.config(text=f"Created: {os.path.basename(txt_path)} in {os.path.basename(folder)}", fg=ACCENT_GREEN)
+                messagebox.showinfo("Success", f"Created info.txt in:\n{txt_path}\n\nYou can edit this file to configure naming for this folder.")
+            except Exception as e:
+                messagebox.showerror("Error", f"Could not create info.txt:\n{e}")
 
     def handle_drop(self, event):
         raw_data = event.data
@@ -639,18 +777,44 @@ class DrawingPackagerApp:
         if not clean_paths:
             return
 
-        # If dropped a single folder
-        if len(clean_paths) == 1 and os.path.isdir(clean_paths[0]):
-            self.input_var.set(clean_paths[0])
-            self.process_incoming_path(clean_paths[0])
+        target = clean_paths[0] if (len(clean_paths) == 1 and os.path.isdir(clean_paths[0])) else clean_paths
+        if isinstance(target, str) and os.path.isdir(target):
+            self.input_var.set(target)
         else:
-            # Dropped a selection of files
             first_dir = os.path.dirname(clean_paths[0])
             if not self.input_var.get():
                 self.input_var.set(first_dir)
-            self.process_incoming_path(clean_paths)
 
-    def process_incoming_path(self, target):
+        # Process path and trigger auto-pack if enabled
+        self.process_incoming_path(target, auto_run_if_ready=self.auto_pack_var.get())
+
+    def process_incoming_path(self, target, auto_run_if_ready=False):
+        # 1. Parse metadata text file if present (e.g. info.txt, 00share.txt, client.txt)
+        meta, txt_file = MetadataParser.find_and_parse(target)
+        if meta and (meta.get("client") or meta.get("project")):
+            self.current_txt_file = txt_file
+            if meta.get("client"):
+                self.client_var.set(meta["client"])
+            if meta.get("project"):
+                self.project_var.set(meta["project"])
+            if meta.get("rev"):
+                self.rev_var.set(meta["rev"])
+            if meta.get("pattern"):
+                self.pattern_var.set(meta["pattern"])
+            if meta.get("sep"):
+                self.sep_var.set(meta["sep"])
+
+            self.txt_status_lbl.config(
+                text=f"Config loaded from: {os.path.basename(txt_file)} (Client: {meta.get('client', '-')})",
+                fg=ACCENT_GREEN
+            )
+        else:
+            self.txt_status_lbl.config(
+                text="No info.txt found in folder (using GUI Client & Project settings)",
+                fg=TEXT_MUTED
+            )
+
+        # 2. Scan drawing pairs
         pairs, zips = DrawingScanner.scan_path(target)
         self.detected_pairs = pairs
         self.detected_zips = zips
@@ -668,30 +832,26 @@ class DrawingPackagerApp:
             text=f"Detected Drawings: {len(pairs)} item(s) ({sum(1 for p in pairs if p['status'] in ['Complete', 'Matched Pair'])} complete)"
         )
 
-        # Auto-adjust modes based on whether zip files exist
+        # Auto-adjust modes based on zip existence
         if zips:
             self.mode_var.set("All in One (CAD+PDF+ZIP)")
         else:
             self.mode_var.set("CAD + PDF")
 
         if pairs:
-            self.status_lbl.config(
-                text=f"Found {len(pairs)} drawing(s). Ready to package.",
-                fg=ACCENT_GREEN
-            )
-            # Select first item by default
+            self.status_lbl.config(text=f"Detected {len(pairs)} drawing(s). Ready.", fg=ACCENT_GREEN)
             self.pairs_listbox.selection_set(0)
             self.update_live_preview()
+
+            # ⚡ ZERO-CLICK AUTO-PACK: If enabled and client is present, run immediately!
+            if auto_run_if_ready and self.client_var.get().strip():
+                self.root.after(100, self.run_packaging)
         else:
-            self.status_lbl.config(
-                text="No DWG, PDF, or ZIP files found in the selected location.",
-                fg=ACCENT_WARN
-            )
+            self.status_lbl.config(text="No DWG or PDF drawings found in selection.", fg=ACCENT_WARN)
 
     def on_pair_selected(self, event):
         selection = self.pairs_listbox.curselection()
         if selection and selection[0] < len(self.detected_pairs):
-            selected_pair = self.detected_pairs[selection[0]]
             self.update_live_preview()
 
     def get_effective_output_folder(self):
@@ -706,7 +866,6 @@ class DrawingPackagerApp:
             else:
                 return os.path.join(os.path.dirname(input_folder), "output_files")
 
-        # Fallback to parent directory of first detected drawing
         if self.detected_pairs:
             sample_file = self.detected_pairs[0]["pdf"] or self.detected_pairs[0]["dwg"]
             if sample_file:
@@ -719,7 +878,7 @@ class DrawingPackagerApp:
         if os.path.exists(folder):
             safe_open_folder(folder)
         else:
-            messagebox.showinfo("Output Folder", f"Output folder does not exist yet:\n{folder}\n\nRun 'Generate Packages' first.")
+            messagebox.showinfo("Output Folder", f"Output folder does not exist yet:\n{folder}\n\nRun 'Generate 6 Package Files' first.")
 
     def reset_all(self):
         self.client_var.set("")
@@ -735,37 +894,29 @@ class DrawingPackagerApp:
         self.detected_summary_lbl.config(text="Detected Drawings: 0 pairs")
         self.progress_bar["value"] = 0
         self.status_lbl.config(text="Reset complete.", fg=TEXT_MUTED)
+        self.txt_status_lbl.config(text="Drop a folder with info.txt or drawings to auto-fill", fg=TEXT_MUTED)
         self.update_live_preview()
 
-    # ================= PACKAGING ENGINE =================
+    # ================= PACKAGING ENGINE (CREATES ALL 6 FILES) =================
 
     def run_packaging(self):
         client = self.client_var.get().strip()
         if not client:
-            messagebox.showerror("Missing Information", "Client Name is required before packaging.")
+            messagebox.showerror("Missing Client", "Client Name is required.\nProvide it in info.txt or type in the Client field.")
             return
 
         if not self.detected_pairs:
-            messagebox.showerror("No Files", "No drawing files detected to package. Please select an input folder or drag & drop files.")
+            messagebox.showerror("No Files", "No drawing files detected to package.")
             return
 
-        # Determine which pairs to process
         is_batch = self.batch_chk_var.get()
-        pairs_to_process = []
+        pairs_to_process = self.detected_pairs if (is_batch or len(self.detected_pairs) == 1) else [
+            self.detected_pairs[self.pairs_listbox.curselection()[0]] if self.pairs_listbox.curselection() else self.detected_pairs[0]
+        ]
 
-        if is_batch or len(self.detected_pairs) == 1:
-            pairs_to_process = self.detected_pairs
-        else:
-            selected_idx = self.pairs_listbox.curselection()
-            if selected_idx:
-                pairs_to_process = [self.detected_pairs[selected_idx[0]]]
-            else:
-                pairs_to_process = self.detected_pairs
-
-        # Filter out invalid pairs
         valid_pairs = [p for p in pairs_to_process if p["pdf"] and (p["dwg"] or self.mode_var.get() == "ZIP + PDF")]
         if not valid_pairs:
-            messagebox.showerror("Invalid Files", "At least one drawing requires a PDF (and DWG for CAD modes). Please check detected items.")
+            messagebox.showerror("Invalid Files", "At least one drawing requires a PDF (and DWG for CAD modes).")
             return
 
         output_dir = self.get_effective_output_folder()
@@ -775,7 +926,7 @@ class DrawingPackagerApp:
             messagebox.showerror("Folder Error", f"Could not create output directory:\n{e}")
             return
 
-        # Save to recent history
+        # Save to history
         add_to_recent("recent_clients", client)
         project_entered = self.project_var.get().strip()
         if project_entered:
@@ -783,7 +934,6 @@ class DrawingPackagerApp:
         if self.include_rev_var.get() and self.rev_var.get().strip():
             add_to_recent("recent_revisions", self.rev_var.get().strip())
 
-        # Update combobox dropdown choices
         self.client_combo["values"] = load_config().get("recent_clients", [])
         self.project_combo["values"] = load_config().get("recent_projects", [])
         self.rev_combo["values"] = load_config().get("recent_revisions", [])
@@ -795,17 +945,18 @@ class DrawingPackagerApp:
         self.progress_bar["value"] = 0
 
         self.btn_run.config(state="disabled")
-        self.status_lbl.config(text=f"Packaging {total} drawing(s)...", fg=ACCENT)
+        self.status_lbl.config(text=f"Creating packages ({total} drawing sets)...", fg=ACCENT)
         self.root.update_idletasks()
 
         success_count = 0
+        total_created_files = 0
         try:
             for idx, pair in enumerate(valid_pairs):
                 drawing_name = pair["base"]
                 client_base = self.compute_base_name(drawing_name)
                 project_name = sanitize_filename(self.project_var.get().strip()) or drawing_name
 
-                # Package Client set
+                # 1. Package Client set: creates 3 files (.pdf, .dwg, .zip)
                 self.create_bundle(
                     dest_folder=output_dir,
                     bundle_name=client_base,
@@ -814,8 +965,9 @@ class DrawingPackagerApp:
                     zip_src=pair["zip"],
                     mode=mode
                 )
+                total_created_files += 3
 
-                # Package Project set (if project name is different from client bundle)
+                # 2. Package Project set: creates 3 files (.pdf, .dwg, .zip)
                 if project_name != client_base:
                     self.create_bundle(
                         dest_folder=output_dir,
@@ -825,14 +977,15 @@ class DrawingPackagerApp:
                         zip_src=pair["zip"],
                         mode=mode
                     )
+                    total_created_files += 3
 
                 success_count += 1
                 self.progress_bar["value"] = success_count
-                self.status_lbl.config(text=f"Processed ({success_count}/{total}): {drawing_name}")
+                self.status_lbl.config(text=f"Packaged ({success_count}/{total}): {drawing_name}")
                 self.root.update_idletasks()
 
             self.status_lbl.config(
-                text=f"Done! Successfully packaged {success_count} drawing set(s) ✅",
+                text=f"Done! Created all {total_created_files} files in output folder ✅",
                 fg=ACCENT_GREEN
             )
             safe_open_folder(output_dir)
@@ -849,14 +1002,12 @@ class DrawingPackagerApp:
         dwg_dest = os.path.join(dest_folder, f"{bundle_name}.dwg")
         zip_dest = os.path.join(dest_folder, f"{bundle_name}.zip")
 
-        # Copy primary files
         if pdf_src and os.path.exists(pdf_src):
             shutil.copy2(pdf_src, pdf_dest)
 
         if dwg_src and os.path.exists(dwg_src):
             shutil.copy2(dwg_src, dwg_dest)
 
-        # Create zip archive
         with zipfile.ZipFile(zip_dest, "w", zipfile.ZIP_DEFLATED) as z:
             if pdf_src and os.path.exists(pdf_dest):
                 z.write(pdf_dest, f"{bundle_name}.pdf")

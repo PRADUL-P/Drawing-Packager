@@ -17,6 +17,7 @@ A high-performance desktop application built for civil engineers, structural des
 
 ## 🚀 Key Features in v2.0
 
+* ⚡ **Zero-Click Auto-Pack (`info.txt`)**: Put an `info.txt` file inside any project folder (e.g. `00share/`). When you drop the folder or its drawings into the app, it reads the naming metadata and **immediately generates all 6 files without a single click!**
 * 📁 **Smart Batch & Pair Detection**: Automatically identifies and matches corresponding `.dwg` and `.pdf` drawing pairs in folders or dropped files.
 * 📦 **Flexible Packaging Modes**:
   * **CAD + PDF**: Standard drawing bundle (`.dwg` + `.pdf`).
