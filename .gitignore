@@ -1,0 +1,21 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+
+# PyInstaller / Packaging
+dist/
+build/
+*.egg-info/
+
+# Configuration and user files
+.ludarp_config.json
+*.recent.json
+*.log
+
+# OS / Editor artifacts
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini

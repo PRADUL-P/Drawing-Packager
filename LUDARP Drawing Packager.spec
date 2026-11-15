@@ -1,12 +1,11 @@
 # -*- mode: python ; coding: utf-8 -*-
 
-
 a = Analysis(
     ['app.py'],
     pathex=[],
     binaries=[],
     datas=[('zip-folder.ico', '.')],
-    hiddenimports=['tkinterdnd2'],
+    hiddenimports=['tkinterdnd2', 'tkcalendar', 'babel.numbers'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
