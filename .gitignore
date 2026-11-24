@@ -7,6 +7,7 @@ __pycache__/
 # PyInstaller / Packaging
 dist/
 build/
+*.exe
 output_files/
 **/output_files/
 *.egg-info/
