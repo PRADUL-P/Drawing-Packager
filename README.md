@@ -11,7 +11,7 @@ A high-performance desktop application built for civil engineers, structural des
 
 ## 📸 Preview
 
-<img width="1001" height="639" alt="image" src="https://github.com/user-attachments/assets/c82649ab-c021-466f-b257-667d478bbf08" />
+<img width="1220" height="825" alt="image" src="https://github.com/user-attachments/assets/43bb4d13-8882-43e9-afb7-670daeb20e52" />
 
 ---
 
