@@ -9,29 +9,59 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from tkinterdnd2 import DND_FILES, TkinterDnD
 from tkcalendar import DateEntry
+from PIL import Image, ImageDraw, ImageTk
 
-# ================= CONFIG & THEME =================
+# Enable Windows DPI Awareness for crisp fonts and borders
+try:
+    import ctypes
+    ctypes.windll.shcore.SetProcessDpiAwareness(1)
+except Exception:
+    try:
+        import ctypes
+        ctypes.windll.user32.SetProcessDPIAware()
+    except Exception:
+        pass
+
+# ================= DESIGN SYSTEM & PALETTE =================
 APP_NAME = "LUDARP Drawing Packager"
 APP_VERSION = "v2.0"
 
-# Modern Slate / Linear Dark Palette
-BG = "#0d1117"             # Outer window background
-CARD = "#161b22"           # Main container cards
-CARD_SECONDARY = "#21262d"    # Inner slots / item cards
-INPUT_BG = "#0d1117"       # Input background
-TEXT_MAIN = "#f0f6fc"      # High contrast main text
-TEXT_MUTED = "#8b949e"     # Subtle labels
-ACCENT = "#238636"         # Success / Action green
-ACCENT_BLUE = "#1f6feb"    # Focus / Primary blue
-ACCENT_HOVER = "#2ea043"   # Button hover
-ACCENT_WARN = "#d29922"    # Warning gold
-BORDER = "#30363d"         # Subtle divider borders
-BTN_BG = "#21262d"
-BTN_HOVER = "#30363d"
+# Premium Obsidian Slate Palette (Linear / Raycast / Figma aesthetics)
+BG = "#0b0f17"              # Deep canvas background
+CARD_BG = "#131b26"         # Main container card
+CARD_SURFACE = "#182230"    # Elevated item surface
+CARD_BORDER = "#223145"     # Refined subtle card borders
+INPUT_BG = "#0d131c"        # Input background
+INPUT_BORDER = "#26354a"    # Input normal border
+INPUT_FOCUS = "#38bdf8"     # Input focus electric blue
+
+# Typography Colors
+TEXT_HEAD = "#f8fafc"       # High contrast pure white
+TEXT_BODY = "#e2e8f0"       # Body text
+TEXT_MUTED = "#8295ab"      # Secondary labels & hints
+TEXT_FAINT = "#475569"      # Very subtle text
+
+# Functional & Brand Accents
+ACCENT_BLUE = "#2563eb"     # Royal Electric Blue
+ACCENT_BLUE_HOVER = "#1d4ed8"
+ACCENT_GREEN = "#10b981"    # Emerald action
+ACCENT_GREEN_HOVER = "#059669"
+ACCENT_WARN = "#f59e0b"     # Amber warning
+ACCENT_CRIMSON = "#ef4444"  # Crimson red
+
+# Badge Colors
+BADGE_PDF_BG = "#3b171a"
+BADGE_PDF_FG = "#f87171"
+BADGE_CAD_BG = "#0f2c3f"
+BADGE_CAD_FG = "#38bdf8"
+BADGE_ZIP_BG = "#38280f"
+BADGE_ZIP_FG = "#fbbf24"
+BADGE_READY_BG = "#064e3b"
+BADGE_READY_FG = "#34d399"
 
 CONFIG_FILE = os.path.join(os.path.expanduser("~"), ".ludarp_packager_config.json")
 
-# ================= UTILITIES =================
+# ================= UTILITIES & ASSET RESOLUTION =================
 
 def resource_path(relative_path):
     """Resolve resource path for dev and frozen PyInstaller standalone."""
@@ -69,7 +99,6 @@ def save_config(config_data):
 
 
 def add_to_recent(key, value):
-    """Store recent values without duplicates, max 15 entries."""
     if not value or not value.strip():
         return
     value = value.strip()
@@ -113,14 +142,11 @@ def parse_dnd_paths(data):
     """Robust parser for TkinterDnD data that handles paths with spaces (e.g. 'Drawing packer')."""
     if not data:
         return []
-
-    # If entire string points to an existing file/folder, return it
     clean_full = data.strip('{}').strip()
     if os.path.exists(clean_full):
         return [os.path.normpath(clean_full)]
 
     paths = []
-    # Match braced paths like {E:/Drawing packer/file.dwg} OR non-whitespace
     matches = re.findall(r'\{([^}]+)\}|(\S+)', data)
     for m in matches:
         p = m[0] if m[0] else m[1]
@@ -128,11 +154,111 @@ def parse_dnd_paths(data):
         if p and os.path.exists(p):
             paths.append(os.path.normpath(p))
 
-    # Fallback check
     if not paths and os.path.exists(data.strip()):
         return [os.path.normpath(data.strip())]
 
     return paths
+
+
+# ================= CUSTOM MODERN WIDGETS =================
+
+class ModernToggle(tk.Canvas):
+    """A sleek iOS/macOS-style smooth pill toggle switch."""
+    def __init__(self, parent, variable, command=None, bg=BG, width=42, height=22):
+        super().__init__(parent, width=width, height=height, bg=bg, highlightthickness=0, cursor="hand2")
+        self.variable = variable
+        self.command = command
+        self.w = width
+        self.h = height
+        self.bind("<Button-1>", self.on_click)
+        self.variable.trace_add("write", lambda *args: self.redraw())
+        self.redraw()
+
+    def on_click(self, event):
+        self.variable.set(not self.variable.get())
+        if self.command:
+            self.command()
+
+    def redraw(self):
+        self.delete("all")
+        is_on = self.variable.get()
+        track_color = ACCENT_GREEN if is_on else "#334155"
+        thumb_color = "#ffffff"
+
+        # Draw rounded pill track
+        r = self.h // 2
+        # Left cap, right cap, center
+        self.create_arc((0, 0, self.h, self.h), start=90, extent=180, fill=track_color, outline=track_color)
+        self.create_arc((self.w - self.h, 0, self.w, self.h), start=270, extent=180, fill=track_color, outline=track_color)
+        self.create_rectangle((r, 0, self.w - r, self.h), fill=track_color, outline=track_color)
+
+        # Draw thumb knob
+        pad = 3
+        th_dia = self.h - (pad * 2)
+        x = (self.w - th_dia - pad) if is_on else pad
+        self.create_oval((x, pad, x + th_dia, pad + th_dia), fill=thumb_color, outline=thumb_color)
+
+
+class ModernButton(tk.Canvas):
+    """A high-end anti-aliased pill button with icon and hover effects."""
+    def __init__(self, parent, text, command, bg_color=CARD_SURFACE, hover_color=CARD_BORDER,
+                 text_color=TEXT_HEAD, font=("Segoe UI", 9, "bold"), height=36, radius=8,
+                 outline_color=None, cursor="hand2", **kwargs):
+        super().__init__(parent, height=height, bg=parent["bg"], highlightthickness=0, cursor=cursor, **kwargs)
+        self.text = text
+        self.command = command
+        self.bg_color = bg_color
+        self.hover_color = hover_color
+        self.current_bg = bg_color
+        self.text_color = text_color
+        self.outline_color = outline_color
+        self.font = font
+        self.h = height
+        self.radius = radius
+
+        self.bind("<Configure>", lambda e: self.redraw())
+        self.bind("<Enter>", self.on_enter)
+        self.bind("<Leave>", self.on_leave)
+        self.bind("<Button-1>", self.on_click)
+
+    def on_enter(self, event):
+        self.current_bg = self.hover_color
+        self.redraw()
+
+    def on_leave(self, event):
+        self.current_bg = self.bg_color
+        self.redraw()
+
+    def on_click(self, event):
+        if self.command:
+            self.command()
+
+    def redraw(self):
+        w = self.winfo_width()
+        h = self.h
+        if w < 10:
+            return
+        self.delete("all")
+
+        # Smooth polygon approximation for rounded corners
+        r = min(self.radius, h // 2)
+        points = [
+            r, 0,
+            w - r, 0,
+            w, 0,
+            w, r,
+            w, h - r,
+            w, h,
+            w - r, h,
+            r, h,
+            0, h,
+            0, h - r,
+            0, r,
+            0, 0
+        ]
+        outline = self.outline_color or self.current_bg
+        self.create_polygon(points, smooth=True, fill=self.current_bg, outline=outline, width=1)
+        self.create_text(w // 2, h // 2, text=self.text, fill=self.text_color, font=self.font)
 
 
 # ================= METADATA & FILE DETECTOR =================
@@ -232,14 +358,14 @@ class FileDetector:
         return zip_file, pdf_file, dwg_file
 
 
-# ================= GORGEOUS MINIMALIST GUI =================
+# ================= THE MASTER APPLICATION =================
 
 class DrawingPackagerApp:
     def __init__(self, root):
         self.root = root
         self.root.title(f"{APP_NAME} {APP_VERSION}")
-        self.root.geometry("880x560")
-        self.root.minsize(820, 520)
+        self.root.geometry("960x600")
+        self.root.minsize(900, 560)
         self.root.configure(bg=BG)
 
         icon_path = resource_path("zip-folder.ico")
@@ -253,11 +379,12 @@ class DrawingPackagerApp:
         self.files = {"zip": None, "pdf": None, "dwg": None}
         self.current_folder = ""
 
+        self.setup_ttk_styles()
         self.build_ui()
         self.bind_events()
         self.update_preview()
 
-        # Fade in
+        # Smooth fade-in
         self.root.attributes("-alpha", 0)
         self.fade_in(0)
 
@@ -269,240 +396,300 @@ class DrawingPackagerApp:
         else:
             self.root.attributes("-alpha", 1.0)
 
+    def setup_ttk_styles(self):
+        style = ttk.Style()
+        try:
+            style.theme_use("clam")
+        except Exception:
+            pass
+        style.configure(".", background=CARD_BG, foreground=TEXT_HEAD, font=("Segoe UI", 9))
+
     def build_ui(self):
-        # Register full-window drag & drop
+        # Full-window drag & drop registration
         self.root.drop_target_register(DND_FILES)
         self.root.dnd_bind("<<Drop>>", self.handle_drop)
 
-        # ================= TOP HEADER BAR =================
+        # ================= TOP HEADER (Brand & Controls) =================
         header = tk.Frame(self.root, bg=BG)
-        header.pack(fill="x", padx=18, pady=(12, 6))
+        header.pack(fill="x", padx=24, pady=(16, 10))
 
-        # Title & Badges
-        title_box = tk.Frame(header, bg=BG)
-        title_box.pack(side="left")
+        # Brand Title & Version Pill
+        brand_frame = tk.Frame(header, bg=BG)
+        brand_frame.pack(side="left")
 
-        tk.Label(title_box, text="🧩 LUDARP Drawing Packager", font=("Segoe UI", 13, "bold"),
-                 bg=BG, fg=TEXT_MAIN).pack(side="left")
-        tk.Label(title_box, text=f" {APP_VERSION} ", font=("Segoe UI", 8, "bold"),
-                 bg=ACCENT_BLUE, fg="white", padx=4, pady=1).pack(side="left", padx=8)
+        tk.Label(brand_frame, text="🧩 LUDARP Drawing Packager", font=("Segoe UI", 14, "bold"),
+                 bg=BG, fg=TEXT_HEAD).pack(side="left")
 
-        # Right Action Toggle
-        right_header = tk.Frame(header, bg=BG)
-        right_header.pack(side="right")
+        ver_pill = tk.Label(brand_frame, text=f" {APP_VERSION} ", font=("Segoe UI", 8, "bold"),
+                            bg=ACCENT_BLUE, fg="white", padx=5, pady=1)
+        ver_pill.pack(side="left", padx=10)
+
+        # Right Controls: Top Generate info.txt & Modern Auto-Pack Toggle
+        ctrl_frame = tk.Frame(header, bg=BG)
+        ctrl_frame.pack(side="right")
 
         btn_top_txt = tk.Button(
-            right_header, text="📄 Generate info.txt", font=("Segoe UI", 8, "bold"),
-            bg=BTN_BG, fg=TEXT_MAIN, relief="flat", padx=8, pady=2,
+            ctrl_frame, text="📄 Generate info.txt", font=("Segoe UI", 8, "bold"),
+            bg=CARD_SURFACE, fg=TEXT_HEAD, relief="flat", padx=12, pady=4,
+            activebackground=CARD_BORDER, activeforeground="white",
             command=self.generate_info_txt
         )
-        btn_top_txt.pack(side="left", padx=(0, 10))
-        self.add_hover(btn_top_txt, BTN_BG, BTN_HOVER)
+        btn_top_txt.pack(side="left", padx=(0, 14))
+        self.add_hover(btn_top_txt, CARD_SURFACE, CARD_BORDER)
+
+        tk.Label(ctrl_frame, text="⚡ Auto-Pack on Drop:", font=("Segoe UI", 9, "bold"),
+                 bg=BG, fg=TEXT_MUTED).pack(side="left", padx=(0, 6))
 
         self.auto_pack_var = tk.BooleanVar(value=self.config.get("auto_pack_on_drop", True))
-        chk_autopack = tk.Checkbutton(
-            right_header,
-            text="⚡ Auto-Pack on Drop",
-            variable=self.auto_pack_var,
-            font=("Segoe UI", 9, "bold"),
-            bg=BG, fg=ACCENT, selectcolor=CARD,
-            activebackground=BG,
-            command=self.save_preferences
-        )
-        chk_autopack.pack(side="right")
+        self.toggle_autopack = ModernToggle(ctrl_frame, self.auto_pack_var, command=self.save_preferences, bg=BG)
+        self.toggle_autopack.pack(side="left")
 
-        # ================= MAIN TWO-COLUMN BODY =================
-        main_body = tk.Frame(self.root, bg=BG)
-        main_body.pack(fill="both", expand=True, padx=14, pady=4)
-        main_body.grid_columnconfigure(0, weight=1, minsize=380)
-        main_body.grid_columnconfigure(1, weight=1, minsize=400)
-        main_body.grid_rowconfigure(0, weight=1)
+        # ================= TWO-COLUMN MASTER WORKSPACE =================
+        workspace = tk.Frame(self.root, bg=BG)
+        workspace.pack(fill="both", expand=True, padx=20, pady=(0, 8))
+        workspace.grid_columnconfigure(0, weight=1, minsize=420)
+        workspace.grid_columnconfigure(1, weight=1, minsize=450)
+        workspace.grid_rowconfigure(0, weight=1)
 
-        # ----------------- LEFT PANEL: METADATA & NAMING -----------------
-        left = tk.Frame(main_body, bg=CARD, relief="flat", padx=16, pady=16, highlightbackground=BORDER, highlightthickness=1)
-        left.grid(row=0, column=0, sticky="nsew", padx=(4, 6), pady=4)
+        # -------------------------------------------------------------
+        # LEFT COLUMN: METADATA, REVISION & CLIENT-PROJECT SETUP
+        # -------------------------------------------------------------
+        left_card = tk.Frame(workspace, bg=CARD_BG, relief="flat", padx=18, pady=16,
+                             highlightbackground=CARD_BORDER, highlightthickness=1)
+        left_card.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
 
-        # Client Name (Strictly for Client files)
-        tk.Label(left, text="CLIENT NAME", font=("Segoe UI", 8, "bold"),
-                 bg=CARD, fg=TEXT_MUTED).pack(anchor="w", pady=(0, 0))
-        client_box = tk.Frame(left, bg=CARD)
-        client_box.pack(fill="x", pady=(2, 10))
+        # Header Title
+        tk.Label(left_card, text="📋  DISPATCH DETAILS", font=("Segoe UI", 9, "bold"),
+                 bg=CARD_BG, fg=TEXT_MUTED).pack(anchor="w", pady=(0, 8))
+
+        # Client Name Field
+        tk.Label(left_card, text="CLIENT NAME (Strictly for Client Files)", font=("Segoe UI", 8, "bold"),
+                 bg=CARD_BG, fg=TEXT_HEAD).pack(anchor="w")
+
+        c_box = tk.Frame(left_card, bg=CARD_BG)
+        c_box.pack(fill="x", pady=(3, 10))
 
         self.client_var = tk.StringVar(value=self.config.get("recent_clients", [""])[0] if self.config.get("recent_clients") else "")
-        self.client_entry = tk.Entry(client_box, textvariable=self.client_var, bg=INPUT_BG,
-                                     fg=TEXT_MAIN, relief="flat", insertbackground="white",
-                                     highlightbackground=BORDER, highlightthickness=1)
-        self.client_entry.pack(side="left", fill="x", expand=True, ipady=5)
+        self.client_entry = tk.Entry(c_box, textvariable=self.client_var, bg=INPUT_BG,
+                                     fg=TEXT_HEAD, relief="flat", insertbackground="white",
+                                     font=("Segoe UI", 10), highlightbackground=INPUT_BORDER, highlightthickness=1)
+        self.client_entry.pack(side="left", fill="x", expand=True, ipady=6, padx=(0, 6))
         self.client_var.trace_add("write", lambda *args: self.update_preview())
+        self.bind_input_glow(self.client_entry)
 
-        btn_paste_c = tk.Button(client_box, text="Paste", font=("Segoe UI", 8),
-                                bg=BTN_BG, fg=TEXT_MAIN, relief="flat", padx=10,
+        btn_c_paste = tk.Button(c_box, text="Paste", font=("Segoe UI", 8),
+                                bg=CARD_SURFACE, fg=TEXT_HEAD, relief="flat", padx=10, pady=5,
                                 command=lambda: self.paste_var(self.client_var))
-        btn_paste_c.pack(side="right", padx=(6, 0))
-        self.add_hover(btn_paste_c, BTN_BG, BTN_HOVER)
+        btn_c_paste.pack(side="right")
+        self.add_hover(btn_c_paste, CARD_SURFACE, CARD_BORDER)
 
-        # Project Name (Strictly for Project files)
-        tk.Label(left, text="PROJECT NAME", font=("Segoe UI", 8, "bold"),
-                 bg=CARD, fg=TEXT_MUTED).pack(anchor="w", pady=(2, 0))
-        proj_box = tk.Frame(left, bg=CARD)
-        proj_box.pack(fill="x", pady=(2, 10))
+        # Project Name Field
+        tk.Label(left_card, text="PROJECT NAME (Strictly for Project Files)", font=("Segoe UI", 8, "bold"),
+                 bg=CARD_BG, fg=TEXT_HEAD).pack(anchor="w")
+
+        p_box = tk.Frame(left_card, bg=CARD_BG)
+        p_box.pack(fill="x", pady=(3, 10))
 
         self.project_var = tk.StringVar(value=self.config.get("recent_projects", [""])[0] if self.config.get("recent_projects") else "")
-        self.project_entry = tk.Entry(proj_box, textvariable=self.project_var, bg=INPUT_BG,
-                                      fg=TEXT_MAIN, relief="flat", insertbackground="white",
-                                      highlightbackground=BORDER, highlightthickness=1)
-        self.project_entry.pack(side="left", fill="x", expand=True, ipady=5)
+        self.project_entry = tk.Entry(p_box, textvariable=self.project_var, bg=INPUT_BG,
+                                      fg=TEXT_HEAD, relief="flat", insertbackground="white",
+                                      font=("Segoe UI", 10), highlightbackground=INPUT_BORDER, highlightthickness=1)
+        self.project_entry.pack(side="left", fill="x", expand=True, ipady=6, padx=(0, 6))
         self.project_var.trace_add("write", lambda *args: self.update_preview())
+        self.bind_input_glow(self.project_entry)
 
-        btn_paste_p = tk.Button(proj_box, text="Paste", font=("Segoe UI", 8),
-                                bg=BTN_BG, fg=TEXT_MAIN, relief="flat", padx=10,
+        btn_p_paste = tk.Button(p_box, text="Paste", font=("Segoe UI", 8),
+                                bg=CARD_SURFACE, fg=TEXT_HEAD, relief="flat", padx=10, pady=5,
                                 command=lambda: self.paste_var(self.project_var))
-        btn_paste_p.pack(side="right", padx=(6, 0))
-        self.add_hover(btn_paste_p, BTN_BG, BTN_HOVER)
+        btn_p_paste.pack(side="right")
+        self.add_hover(btn_p_paste, CARD_SURFACE, CARD_BORDER)
 
-        # Quick Generate info.txt button
-        btn_gen_txt = tk.Button(left, text="📄 Generate info.txt for this Project", font=("Segoe UI", 8, "bold"),
-                                bg=CARD_SECONDARY, fg=ACCENT_BLUE, relief="flat", pady=4,
-                                command=self.generate_info_txt)
-        btn_gen_txt.pack(fill="x", pady=(0, 6))
-        self.add_hover(btn_gen_txt, CARD_SECONDARY, BTN_HOVER)
-
-        # Date Option
-        date_bar = tk.Frame(left, bg=CARD)
-        date_bar.pack(fill="x", pady=(4, 8))
+        # Date Bar Option with Modern Toggle
+        date_bar = tk.Frame(left_card, bg=CARD_SURFACE, padx=10, pady=6, highlightbackground=CARD_BORDER, highlightthickness=1)
+        date_bar.pack(fill="x", pady=(0, 10))
 
         self.include_date_var = tk.BooleanVar(value=self.config.get("include_date", True))
-        chk_date = tk.Checkbutton(date_bar, text="Add Date to Client files:", variable=self.include_date_var,
-                                  font=("Segoe UI", 8), bg=CARD, fg=TEXT_MAIN,
-                                  selectcolor=INPUT_BG, activebackground=CARD,
-                                  command=self.update_preview)
-        chk_date.pack(side="left")
+        self.toggle_date = ModernToggle(date_bar, self.include_date_var, command=self.update_preview, bg=CARD_SURFACE)
+        self.toggle_date.pack(side="left", padx=(0, 8))
+
+        tk.Label(date_bar, text="Include Date on Client Package", font=("Segoe UI", 8, "bold"),
+                 bg=CARD_SURFACE, fg=TEXT_HEAD).pack(side="left")
 
         self.date_picker = DateEntry(date_bar, date_pattern="dd-mm-yyyy",
                                      background=ACCENT_BLUE, foreground="white", borderwidth=0)
         self.date_picker.pack(side="right")
         self.date_picker.bind("<<DateEntrySelected>>", lambda e: self.update_preview())
 
-        # Target 6 Files Live Preview Box
-        preview_box = tk.Frame(left, bg=CARD_SECONDARY, relief="flat", padx=12, pady=10, highlightbackground=BORDER, highlightthickness=1)
-        preview_box.pack(fill="both", expand=True, pady=(10, 0))
-
-        tk.Label(preview_box, text="OUTPUT TARGET (6 FILES):", font=("Segoe UI", 8, "bold"),
-                 bg=CARD_SECONDARY, fg=ACCENT_BLUE).pack(anchor="w")
-
-        self.lbl_client_out = tk.Label(preview_box, text="Client (3): ...", font=("Consolas", 8),
-                                       bg=CARD_SECONDARY, fg=TEXT_MAIN, justify="left")
-        self.lbl_client_out.pack(anchor="w", pady=(4, 2))
-
-        self.lbl_proj_out = tk.Label(preview_box, text="Project (3): ...", font=("Consolas", 8),
-                                     bg=CARD_SECONDARY, fg=TEXT_MAIN, justify="left")
-        self.lbl_proj_out.pack(anchor="w", pady=(2, 4))
-
-        # ----------------- RIGHT PANEL: DETECTED FILES & ACTIONS -----------------
-        right = tk.Frame(main_body, bg=CARD, relief="flat", padx=16, pady=16, highlightbackground=BORDER, highlightthickness=1)
-        right.grid(row=0, column=1, sticky="nsew", padx=(6, 4), pady=4)
-
-        # Big Drag & Drop Slot with Choose Folder Button
-        drop_container = tk.Frame(right, bg=INPUT_BG, highlightbackground=BORDER, highlightthickness=1)
-        drop_container.pack(fill="x", pady=(0, 8))
-
-        self.drop_slot = tk.Label(
-            drop_container,
-            text="⬇️ DRAG & DROP FOLDER (e.g. 00share) OR FILES HERE",
-            font=("Segoe UI", 9, "bold"), bg=INPUT_BG, fg=TEXT_MAIN,
-            pady=8
+        # Generate info.txt Helper Button
+        btn_gen_info = tk.Button(
+            left_card, text="💾 Save Current Names as info.txt", font=("Segoe UI", 8, "bold"),
+            bg=CARD_SURFACE, fg=ACCENT_BLUE, relief="flat", pady=5,
+            command=self.generate_info_txt
         )
-        self.drop_slot.pack(fill="x")
-        self.drop_slot.drop_target_register(DND_FILES)
-        self.drop_slot.dnd_bind("<<Drop>>", self.handle_drop)
+        btn_gen_info.pack(fill="x", pady=(0, 12))
+        self.add_hover(btn_gen_info, CARD_SURFACE, CARD_BORDER)
 
-        btn_choose_folder = tk.Button(
-            drop_container, text="📁 Or Select Folder...", font=("Segoe UI", 8, "bold"),
-            bg=BTN_BG, fg=ACCENT_BLUE, relief="flat", padx=10, pady=3,
+        # Output Target Manifest (Live 6 Files Visual Card)
+        preview_card = tk.Frame(left_card, bg=CARD_SURFACE, padx=12, pady=10, highlightbackground=CARD_BORDER, highlightthickness=1)
+        preview_card.pack(fill="both", expand=True)
+
+        tk.Label(preview_card, text="TARGET OUTPUT MANIFEST (6 FILES)", font=("Segoe UI", 8, "bold"),
+                 bg=CARD_SURFACE, fg=TEXT_MUTED).pack(anchor="w")
+
+        # Client 3 files block
+        c_disp_frame = tk.Frame(preview_card, bg=CARD_SURFACE)
+        c_disp_frame.pack(fill="x", pady=(6, 2))
+        tk.Label(c_disp_frame, text="CLIENT SET (3):", font=("Segoe UI", 7, "bold"), bg=CARD_SURFACE, fg=ACCENT_BLUE).pack(anchor="w")
+        self.lbl_client_out = tk.Label(c_disp_frame, text="...", font=("Consolas", 8),
+                                       bg=CARD_SURFACE, fg=TEXT_HEAD, justify="left", anchor="w")
+        self.lbl_client_out.pack(fill="x")
+
+        # Project 3 files block
+        p_disp_frame = tk.Frame(preview_card, bg=CARD_SURFACE)
+        p_disp_frame.pack(fill="x", pady=(4, 2))
+        tk.Label(p_disp_frame, text="PROJECT SET (3):", font=("Segoe UI", 7, "bold"), bg=CARD_SURFACE, fg=ACCENT_GREEN).pack(anchor="w")
+        self.lbl_proj_out = tk.Label(p_disp_frame, text="...", font=("Consolas", 8),
+                                     bg=CARD_SURFACE, fg=TEXT_HEAD, justify="left", anchor="w")
+        self.lbl_proj_out.pack(fill="x")
+
+        # -------------------------------------------------------------
+        # RIGHT COLUMN: DRAG & DROP, 3 VISUAL FILE SLOTS & ACTIONS
+        # -------------------------------------------------------------
+        right_card = tk.Frame(workspace, bg=CARD_BG, relief="flat", padx=18, pady=16,
+                              highlightbackground=CARD_BORDER, highlightthickness=1)
+        right_card.grid(row=0, column=1, sticky="nsew", padx=(8, 0))
+
+        # Large Modern Drop Zone
+        self.drop_container = tk.Frame(right_card, bg=CARD_SURFACE, highlightbackground=CARD_BORDER, highlightthickness=1)
+        self.drop_container.pack(fill="x", pady=(0, 10))
+
+        self.drop_icon_lbl = tk.Label(self.drop_container, text="📂 ⬆️", font=("Segoe UI", 16),
+                                      bg=CARD_SURFACE, fg=ACCENT_BLUE)
+        self.drop_icon_lbl.pack(pady=(10, 0))
+
+        self.drop_main_lbl = tk.Label(
+            self.drop_container, text="DRAG & DROP DRAWING FOLDER OR FILES",
+            font=("Segoe UI", 9, "bold"), bg=CARD_SURFACE, fg=TEXT_HEAD
+        )
+        self.drop_main_lbl.pack()
+
+        self.drop_sub_lbl = tk.Label(
+            self.drop_container, text="Auto-detects matching DWG, PDF and ZIP files + info.txt",
+            font=("Segoe UI", 8), bg=CARD_SURFACE, fg=TEXT_MUTED
+        )
+        self.drop_sub_lbl.pack(pady=(1, 6))
+
+        # Browse Folder button inside Drop area
+        btn_browse_folder = tk.Button(
+            self.drop_container, text="📁 Choose Folder...", font=("Segoe UI", 8, "bold"),
+            bg=INPUT_BG, fg=TEXT_HEAD, relief="flat", padx=12, pady=4,
             command=self.browse_folder
         )
-        btn_choose_folder.pack(pady=(0, 6))
-        self.add_hover(btn_choose_folder, BTN_BG, BTN_HOVER)
+        btn_browse_folder.pack(pady=(0, 10))
+        self.add_hover(btn_browse_folder, INPUT_BG, CARD_BORDER)
 
-        # THREE VISUAL FILE SLOTS (ZIP, CAD, PDF)
-        self.zip_card = self.create_file_card(right, "📦 ZIP ARCHIVE", "zip")
-        self.dwg_card = self.create_file_card(right, "📐 CAD DRAWING", "dwg")
-        self.pdf_card = self.create_file_card(right, "📄 PDF SHEET", "pdf")
+        # Connect drag-and-drop to all drop components
+        for w in [self.drop_container, self.drop_icon_lbl, self.drop_main_lbl, self.drop_sub_lbl]:
+            w.drop_target_register(DND_FILES)
+            w.dnd_bind("<<Drop>>", self.handle_drop)
 
-        # Packaging Mode Selector
-        mode_box = tk.Frame(right, bg=CARD)
-        mode_box.pack(fill="x", pady=(6, 6))
+        # 3 DEDICATED VISUAL FILE STATUS SLOTS (PDF, CAD, ZIP)
+        self.pdf_card = self.create_visual_slot(right_card, "PDF SHEET", "PDF", BADGE_PDF_BG, BADGE_PDF_FG, "pdf")
+        self.dwg_card = self.create_visual_slot(right_card, "CAD DRAWING", "DWG", BADGE_CAD_BG, BADGE_CAD_FG, "dwg")
+        self.zip_card = self.create_visual_slot(right_card, "ZIP ARCHIVE", "ZIP", BADGE_ZIP_BG, BADGE_ZIP_FG, "zip")
 
-        tk.Label(mode_box, text="Mode:", font=("Segoe UI", 8, "bold"), bg=CARD, fg=TEXT_MUTED).pack(side="left")
+        # Mode Selector
+        mode_frame = tk.Frame(right_card, bg=CARD_BG)
+        mode_frame.pack(fill="x", pady=(8, 8))
+
+        tk.Label(mode_frame, text="Packaging Mode:", font=("Segoe UI", 8, "bold"), bg=CARD_BG, fg=TEXT_MUTED).pack(side="left")
+
         self.mode_var = tk.StringVar(value="CAD + PDF")
         self.mode_options = ["CAD + PDF", "ZIP + PDF", "All in One (CAD+PDF+ZIP)"]
-        self.mode_menu = tk.OptionMenu(mode_box, self.mode_var, *self.mode_options)
-        self.mode_menu.config(bg=CARD_SECONDARY, fg=TEXT_MAIN, relief="flat", highlightthickness=0)
-        self.mode_menu["menu"].config(bg=CARD_SECONDARY, fg=TEXT_MAIN)
-        self.mode_menu.pack(side="right", fill="x", expand=True, padx=(8, 0))
+        self.mode_menu = tk.OptionMenu(mode_frame, self.mode_var, *self.mode_options)
+        self.mode_menu.config(bg=CARD_SURFACE, fg=TEXT_HEAD, relief="flat", highlightthickness=0, font=("Segoe UI", 8, "bold"))
+        self.mode_menu["menu"].config(bg=CARD_SURFACE, fg=TEXT_HEAD, font=("Segoe UI", 8))
+        self.mode_menu.pack(side="right", fill="x", expand=True, padx=(10, 0))
 
-        # Big Action Button
+        # Grand Primary Action Button
         self.btn_generate = tk.Button(
-            right, text="⚡ Generate All 6 Package Files", font=("Segoe UI", 10, "bold"),
-            bg=ACCENT, fg="white", relief="flat", pady=8,
+            right_card, text="⚡  GENERATE ALL 6 PACKAGE FILES", font=("Segoe UI", 10, "bold"),
+            bg=ACCENT_GREEN, fg="white", relief="flat", pady=10, cursor="hand2",
+            activebackground=ACCENT_GREEN_HOVER, activeforeground="white",
             command=self.run_packaging
         )
-        self.btn_generate.pack(fill="x", pady=(6, 4))
-        self.add_hover(self.btn_generate, ACCENT, ACCENT_HOVER)
+        self.btn_generate.pack(fill="x", pady=(2, 6))
+        self.add_hover(self.btn_generate, ACCENT_GREEN, ACCENT_GREEN_HOVER)
 
-        # Sub-buttons: Open folder & Reset
-        action_row = tk.Frame(right, bg=CARD)
-        action_row.pack(fill="x")
+        # Secondary Actions
+        action_bar = tk.Frame(right_card, bg=CARD_BG)
+        action_bar.pack(fill="x")
 
-        btn_open = tk.Button(action_row, text="📂 Open Output Folder", font=("Segoe UI", 8),
-                             bg=BTN_BG, fg=TEXT_MAIN, relief="flat", pady=4,
+        btn_open = tk.Button(action_bar, text="📂 Open Output Folder", font=("Segoe UI", 8, "bold"),
+                             bg=CARD_SURFACE, fg=TEXT_HEAD, relief="flat", pady=5,
                              command=self.open_output)
-        btn_open.pack(side="left", fill="x", expand=True, padx=(0, 3))
-        self.add_hover(btn_open, BTN_BG, BTN_HOVER)
+        btn_open.pack(side="left", fill="x", expand=True, padx=(0, 4))
+        self.add_hover(btn_open, CARD_SURFACE, CARD_BORDER)
 
-        btn_reset = tk.Button(action_row, text="🔄 Reset", font=("Segoe UI", 8),
-                              bg=BTN_BG, fg=TEXT_MAIN, relief="flat", pady=4,
+        btn_reset = tk.Button(action_bar, text="🔄 Reset All", font=("Segoe UI", 8, "bold"),
+                              bg=CARD_SURFACE, fg=TEXT_HEAD, relief="flat", pady=5,
                               command=self.reset_all)
-        btn_reset.pack(side="right", fill="x", expand=True, padx=(3, 0))
-        self.add_hover(btn_reset, BTN_BG, BTN_HOVER)
+        btn_reset.pack(side="right", fill="x", expand=True, padx=(4, 0))
+        self.add_hover(btn_reset, CARD_SURFACE, CARD_BORDER)
 
         # Status text
-        self.status_lbl = tk.Label(right, text="Ready. Drop folder or files.", font=("Segoe UI", 8),
-                                   bg=CARD, fg=TEXT_MUTED)
-        self.status_lbl.pack(anchor="w", pady=(6, 0))
+        self.status_lbl = tk.Label(right_card, text="Ready. Drop drawing folder or files.",
+                                   font=("Segoe UI", 8, "bold"), bg=CARD_BG, fg=TEXT_MUTED)
+        self.status_lbl.pack(anchor="w", pady=(8, 0))
 
-        # ================= BOTTOM STATUS FOOTER =================
+        # ================= FOOTER BAR =================
         footer = tk.Frame(self.root, bg=BG)
-        footer.pack(fill="x", padx=18, pady=(4, 8))
+        footer.pack(fill="x", padx=24, pady=(2, 10))
 
         self.info_status_lbl = tk.Label(footer, text="No info.txt active", font=("Segoe UI", 8),
                                         bg=BG, fg=TEXT_MUTED)
         self.info_status_lbl.pack(side="left")
 
         tk.Label(footer, text="Press <Enter> to Generate | LUDARP", font=("Segoe UI", 8),
-                 bg=BG, fg=TEXT_MUTED).pack(side="right")
+                 bg=BG, fg=TEXT_FAINT).pack(side="right")
 
-    def create_file_card(self, parent, title, ftype):
-        """Creates a modern visual status slot for ZIP, CAD, or PDF."""
-        card = tk.Frame(parent, bg=CARD_SECONDARY, relief="flat", padx=8, pady=5, highlightbackground=BORDER, highlightthickness=1)
+    # ================= VISUAL SLOT HELPER =================
+
+    def create_visual_slot(self, parent, title, badge_text, badge_bg, badge_fg, ftype):
+        """Creates a modern visual status slot for PDF, CAD, or ZIP."""
+        card = tk.Frame(parent, bg=CARD_SURFACE, relief="flat", padx=10, pady=6,
+                        highlightbackground=CARD_BORDER, highlightthickness=1)
         card.pack(fill="x", pady=2)
 
-        lbl_title = tk.Label(card, text=title, font=("Segoe UI", 8, "bold"), bg=CARD_SECONDARY, fg=TEXT_MUTED, width=14, anchor="w")
-        lbl_title.pack(side="left")
+        # Colored Badge
+        badge = tk.Label(card, text=f" {badge_text} ", font=("Segoe UI", 7, "bold"),
+                         bg=badge_bg, fg=badge_fg, padx=4, pady=1)
+        badge.pack(side="left", padx=(0, 8))
 
-        lbl_name = tk.Label(card, text="— No file loaded —", font=("Segoe UI", 8), bg=CARD_SECONDARY, fg=TEXT_MUTED, anchor="w")
-        lbl_name.pack(side="left", fill="x", expand=True, padx=4)
+        # File Title & Name
+        name_frame = tk.Frame(card, bg=CARD_SURFACE)
+        name_frame.pack(side="left", fill="x", expand=True)
 
-        btn_browse = tk.Button(card, text="Browse", font=("Segoe UI", 7), bg=BTN_BG, fg=TEXT_MAIN, relief="flat", padx=6,
+        lbl_name = tk.Label(name_frame, text="— No file loaded —", font=("Segoe UI", 8),
+                            bg=CARD_SURFACE, fg=TEXT_MUTED, anchor="w")
+        lbl_name.pack(fill="x")
+
+        # Browse action button
+        btn_browse = tk.Button(card, text="Browse", font=("Segoe UI", 7, "bold"),
+                               bg=INPUT_BG, fg=TEXT_HEAD, relief="flat", padx=8, pady=2,
                                command=lambda t=ftype: self.manual_browse_file(t))
         btn_browse.pack(side="right")
-        self.add_hover(btn_browse, BTN_BG, BTN_HOVER)
+        self.add_hover(btn_browse, INPUT_BG, CARD_BORDER)
 
-        return {"frame": card, "title": lbl_title, "label": lbl_name, "btn": btn_browse}
+        return {"frame": card, "badge": badge, "label": lbl_name, "btn": btn_browse}
 
     def add_hover(self, widget, normal, hover):
         widget.bind("<Enter>", lambda e: widget.config(bg=hover))
         widget.bind("<Leave>", lambda e: widget.config(bg=normal))
+
+    def bind_input_glow(self, entry):
+        entry.bind("<FocusIn>", lambda e: entry.config(highlightbackground=INPUT_FOCUS))
+        entry.bind("<FocusOut>", lambda e: entry.config(highlightbackground=INPUT_BORDER))
 
     def bind_events(self):
         self.include_date_var.trace_add("write", lambda *args: self.update_preview())
@@ -528,37 +715,12 @@ class DrawingPackagerApp:
         if folder:
             self.load_target([folder])
 
-    def generate_info_txt(self):
-        """Generates an info.txt file with current Client and Project names."""
-        client = self.client_var.get().strip()
-        project = self.project_var.get().strip()
-
-        if not client and not project:
-            messagebox.showinfo("Enter Names", "Please enter at least a Client Name or Project Name before generating info.txt.")
-            return
-
-        target_dir = self.current_folder if (self.current_folder and os.path.exists(self.current_folder)) else ""
-        if not target_dir:
-            target_dir = filedialog.askdirectory(title="Select Folder to Save info.txt (e.g. 00share)")
-
-        if target_dir and os.path.isdir(target_dir):
-            txt_path = os.path.join(target_dir, "info.txt")
-            content = f"Client: {client}\nProject: {project}\n"
-            try:
-                with open(txt_path, "w", encoding="utf-8") as f:
-                    f.write(content)
-                self.current_folder = target_dir
-                self.info_status_lbl.config(
-                    text=f"✓ info.txt generated in: {os.path.basename(target_dir)}",
-                    fg=ACCENT
-                )
-                if messagebox.askyesno("info.txt Generated", f"Successfully created info.txt in:\n{txt_path}\n\nClient: {client or '(None)'}\nProject: {project or '(None)'}\n\nOpen this file in Notepad?"):
-                    safe_open_folder(txt_path)
-            except Exception as e:
-                messagebox.showerror("Error", f"Could not create info.txt:\n{e}")
-
     def manual_browse_file(self, ftype):
-        ext_map = {"zip": [("ZIP Archive", "*.zip")], "dwg": [("AutoCAD Drawing", "*.dwg")], "pdf": [("PDF Sheet", "*.pdf")]}
+        ext_map = {
+            "zip": [("ZIP Archive", "*.zip")],
+            "dwg": [("AutoCAD Drawing", "*.dwg")],
+            "pdf": [("PDF Sheet", "*.pdf")]
+        }
         path = filedialog.askopenfilename(filetypes=ext_map.get(ftype, [("All files", "*.*")]))
         if path:
             self.files[ftype] = os.path.normpath(path)
@@ -569,28 +731,34 @@ class DrawingPackagerApp:
 
     def update_file_cards(self):
         """Updates the visual cards for ZIP, CAD, and PDF."""
-        # 1. ZIP
-        if self.files["zip"] and os.path.exists(self.files["zip"]):
-            sz = format_size(os.path.getsize(self.files["zip"]))
-            self.zip_card["label"].config(text=f"✓ {os.path.basename(self.files['zip'])} ({sz})", fg=ACCENT)
-        else:
-            self.zip_card["label"].config(text="— None (optional) —", fg=TEXT_MUTED)
-
-        # 2. DWG
-        if self.files["dwg"] and os.path.exists(self.files["dwg"]):
-            sz = format_size(os.path.getsize(self.files["dwg"]))
-            self.dwg_card["label"].config(text=f"✓ {os.path.basename(self.files['dwg'])} ({sz})", fg=ACCENT)
-        else:
-            self.dwg_card["label"].config(text="— Missing DWG —", fg=ACCENT_WARN)
-
-        # 3. PDF
+        # 1. PDF
         if self.files["pdf"] and os.path.exists(self.files["pdf"]):
             sz = format_size(os.path.getsize(self.files["pdf"]))
-            self.pdf_card["label"].config(text=f"✓ {os.path.basename(self.files['pdf'])} ({sz})", fg=ACCENT)
+            self.pdf_card["label"].config(text=f"{os.path.basename(self.files['pdf'])}  ({sz})", fg=TEXT_HEAD)
+            self.pdf_card["frame"].config(highlightbackground=ACCENT_GREEN)
         else:
-            self.pdf_card["label"].config(text="— Missing PDF —", fg=ACCENT_WARN)
+            self.pdf_card["label"].config(text="— Missing PDF —", fg=TEXT_MUTED)
+            self.pdf_card["frame"].config(highlightbackground=CARD_BORDER)
 
-        # Auto-adjust mode based on zip existence
+        # 2. CAD / DWG
+        if self.files["dwg"] and os.path.exists(self.files["dwg"]):
+            sz = format_size(os.path.getsize(self.files["dwg"]))
+            self.dwg_card["label"].config(text=f"{os.path.basename(self.files['dwg'])}  ({sz})", fg=TEXT_HEAD)
+            self.dwg_card["frame"].config(highlightbackground=ACCENT_GREEN)
+        else:
+            self.dwg_card["label"].config(text="— Missing DWG —", fg=TEXT_MUTED)
+            self.dwg_card["frame"].config(highlightbackground=CARD_BORDER)
+
+        # 3. ZIP
+        if self.files["zip"] and os.path.exists(self.files["zip"]):
+            sz = format_size(os.path.getsize(self.files["zip"]))
+            self.zip_card["label"].config(text=f"{os.path.basename(self.files['zip'])}  ({sz})", fg=TEXT_HEAD)
+            self.zip_card["frame"].config(highlightbackground=ACCENT_GREEN)
+        else:
+            self.zip_card["label"].config(text="— None (optional) —", fg=TEXT_MUTED)
+            self.zip_card["frame"].config(highlightbackground=CARD_BORDER)
+
+        # Auto-adjust packaging mode based on ZIP presence
         if self.files["zip"]:
             self.mode_var.set("All in One (CAD+PDF+ZIP)")
         else:
@@ -620,8 +788,8 @@ class DrawingPackagerApp:
     def update_preview(self):
         c_base = self.get_client_base()
         p_base = self.get_project_base()
-        self.lbl_client_out.config(text=f"Client (3):  {c_base}.(pdf/dwg/zip)")
-        self.lbl_proj_out.config(text=f"Project (3): {p_base}.(pdf/dwg/zip)")
+        self.lbl_client_out.config(text=f"• {c_base}.pdf\n• {c_base}.dwg\n• {c_base}.zip")
+        self.lbl_proj_out.config(text=f"• {p_base}.pdf\n• {p_base}.dwg\n• {p_base}.zip")
 
     # ================= DRAG & DROP HANDLER =================
 
@@ -648,8 +816,8 @@ class DrawingPackagerApp:
             if meta.get("project"):
                 self.project_var.set(meta["project"])
             self.info_status_lbl.config(
-                text=f"✓ Config loaded from: {os.path.basename(txt_path)}",
-                fg=ACCENT
+                text=f"✓ Config loaded: {os.path.basename(txt_path)}",
+                fg=ACCENT_GREEN
             )
         else:
             self.info_status_lbl.config(
@@ -670,12 +838,41 @@ class DrawingPackagerApp:
         self.update_preview()
 
         loaded = [k.upper() for k, v in self.files.items() if v]
-        self.status_lbl.config(text=f"Loaded: {', '.join(loaded) if loaded else 'None'}", fg=ACCENT)
+        self.status_lbl.config(text=f"Loaded: {', '.join(loaded) if loaded else 'None'}", fg=ACCENT_GREEN)
 
         # ⚡ ZERO-CLICK AUTO-PACK: if enabled and client + drawing are present
         if self.auto_pack_var.get() and self.client_var.get().strip() and self.files["pdf"]:
             self.root.update_idletasks()
             self.run_packaging()
+
+    def generate_info_txt(self):
+        """Generates an info.txt file with current Client and Project names."""
+        client = self.client_var.get().strip()
+        project = self.project_var.get().strip()
+
+        if not client and not project:
+            messagebox.showinfo("Enter Names", "Please enter at least a Client Name or Project Name before generating info.txt.")
+            return
+
+        target_dir = self.current_folder if (self.current_folder and os.path.exists(self.current_folder)) else ""
+        if not target_dir:
+            target_dir = filedialog.askdirectory(title="Select Folder to Save info.txt (e.g. 00share)")
+
+        if target_dir and os.path.isdir(target_dir):
+            txt_path = os.path.join(target_dir, "info.txt")
+            content = f"Client: {client}\nProject: {project}\n"
+            try:
+                with open(txt_path, "w", encoding="utf-8") as f:
+                    f.write(content)
+                self.current_folder = target_dir
+                self.info_status_lbl.config(
+                    text=f"✓ info.txt generated in: {os.path.basename(target_dir)}",
+                    fg=ACCENT_GREEN
+                )
+                if messagebox.askyesno("info.txt Generated", f"Successfully created info.txt in:\n{txt_path}\n\nClient: {client or '(None)'}\nProject: {project or '(None)'}\n\nOpen this file in Notepad?"):
+                    safe_open_folder(txt_path)
+            except Exception as e:
+                messagebox.showerror("Error", f"Could not create info.txt:\n{e}")
 
     # ================= PACKAGING ENGINE =================
 
@@ -699,7 +896,7 @@ class DrawingPackagerApp:
         self.files = {"zip": None, "pdf": None, "dwg": None}
         self.update_file_cards()
         self.update_preview()
-        self.status_lbl.config(text="Reset done.", fg=TEXT_MUTED)
+        self.status_lbl.config(text="Reset complete.", fg=TEXT_MUTED)
 
     def run_packaging(self):
         client = sanitize_filename(self.client_var.get().strip())
@@ -730,7 +927,7 @@ class DrawingPackagerApp:
         p_base = project
 
         self.btn_generate.config(state="disabled")
-        self.status_lbl.config(text="Creating 6 package files...", fg=ACCENT_BLUE)
+        self.status_lbl.config(text="Packaging 6 files...", fg=ACCENT_BLUE)
         self.root.update_idletasks()
 
         try:
@@ -741,7 +938,7 @@ class DrawingPackagerApp:
             if p_base != c_base:
                 self.create_bundle(out_dir, p_base, self.files["pdf"], self.files["dwg"], self.files["zip"], mode, inner_label=p_base)
 
-            self.status_lbl.config(text="Done! Created all 6 files ✅", fg=ACCENT)
+            self.status_lbl.config(text="Done! Created all 6 files in output folder ✅", fg=ACCENT_GREEN)
             safe_open_folder(out_dir)
 
         except Exception as err:
