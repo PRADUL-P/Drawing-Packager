@@ -9,7 +9,11 @@ A high-performance desktop application built for civil engineers, structural des
 
 ---
 
-## 📸 Preview
+## 📸 Preview & Video Demo
+
+[![Watch the Demo Video](https://img.youtube.com/vi/OdTz4SFu0KI/maxresdefault.jpg)](https://youtu.be/OdTz4SFu0KI)
+
+▶️ **Click above or watch the full video demonstration:** [https://youtu.be/OdTz4SFu0KI](https://youtu.be/OdTz4SFu0KI)
 
 <img width="1220" height="825" alt="image" src="https://github.com/user-attachments/assets/43bb4d13-8882-43e9-afb7-670daeb20e52" />
 
@@ -115,18 +119,40 @@ Drawing-Packager/
 
 ## 🔧 Tech Stack
 
-* **Language**: Python 3
-* **GUI Engine**: Tkinter
-* **Drag & Drop**: TkinterDnD2
+* **Language**: Python 3.10+
+* **GUI Engine**: CustomTkinter 6.0 (Glassmorphism & Dynamic Themes) & Tkinter
+* **Drag & Drop Engine**: TkinterDnD2
 * **Date Picker**: tkcalendar
 * **Packaging**: PyInstaller
 
 ---
 
-## ▶️ Demo Video
+## 📜 Version History (Changelog)
 
-Watch the video walkthrough:
-[YouTube Demo Playlist](https://www.youtube.com/watch?v=XTDXAKkgGdE&list=PLBip7ccT-VcsgEbjz1ObwGUfuJRN8R7LB)
+### **v2.0 (Latest Release)**
+- 💎 **Modern Glassmorphism UI**: Re-engineered UI using CustomTkinter with frosted glass cards, rounded corners, subtle glows, and clean layouts.
+- 🌗 **Instant Dark & Light Theme Switcher**: 1-click segmented toggle (`🌙 Dark` / `☀️ Light`) with persistent state across app launches.
+- 🎯 **Strict 6-File Manifest**: Generates 3 Client files (`{client}_{date}.pdf`, `.dwg`, `.zip`) + 3 Project files (`{project}.pdf`, `.dwg`, `.zip`) with zero naming collision.
+- ⚡ **Zero-Click Auto-Pack (`info.txt`)**: Drag & drop any folder with `info.txt` to instantly auto-pack all 6 files without needing any clicks.
+- 🏷️ **Visual File Status Cards**: Dedicated status slots for PDF (Crimson), DWG (Cyan), and ZIP (Amber) showing file names, sizes, and validation states.
+- 📄 **On-The-Fly `info.txt` Generator**: Added a 1-click tool to generate or update `info.txt` directly inside destination folders (e.g., `00share`).
+- 🧹 **Clean Standalone Distribution**: Single-file `.exe` executable with embedded CustomTkinter themes, fonts, and assets.
+
+### **v1.0 (Initial Release)**
+- 📦 Basic drawing pair packaging (`.dwg` and `.pdf`).
+- 📁 Standard folder drag & drop.
+- 📅 Calendar date selector.
+- 🏷️ Revision tag formatting.
+
+---
+
+## 🎥 Video Walkthrough
+
+Watch the full workflow demo on YouTube:
+
+[![Watch Demo Video](https://img.youtube.com/vi/OdTz4SFu0KI/maxresdefault.jpg)](https://youtu.be/OdTz4SFu0KI)
+
+▶️ **Watch the video:** [https://youtu.be/OdTz4SFu0KI](https://youtu.be/OdTz4SFu0KI)
 
 ---
 
