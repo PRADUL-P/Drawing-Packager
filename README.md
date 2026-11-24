@@ -14,9 +14,9 @@ A high-performance desktop application built for civil engineers, structural des
 [![Watch the Demo Video](https://img.youtube.com/vi/OdTz4SFu0KI/maxresdefault.jpg)](https://youtu.be/OdTz4SFu0KI)
 
 ▶️ **Click above or watch the full video demonstration:** [https://youtu.be/OdTz4SFu0KI](https://youtu.be/OdTz4SFu0KI)
-
+<!-- 
 <img width="1220" height="825" alt="image" src="https://github.com/user-attachments/assets/43bb4d13-8882-43e9-afb7-670daeb20e52" />
-
+ -->
 ---
 
 ## 🚀 Key Features in v2.0
@@ -146,13 +146,6 @@ Drawing-Packager/
 
 ---
 
-## 🎥 Video Walkthrough
-
-Watch the full workflow demo on YouTube:
-
-[![Watch Demo Video](https://img.youtube.com/vi/OdTz4SFu0KI/maxresdefault.jpg)](https://youtu.be/OdTz4SFu0KI)
-
-▶️ **Watch the video:** [https://youtu.be/OdTz4SFu0KI](https://youtu.be/OdTz4SFu0KI)
 
 ---
 
