@@ -1,11 +1,15 @@
 # -*- mode: python ; coding: utf-8 -*-
+from PyInstaller.utils.hooks import collect_all
+
+datas_ctk, binaries_ctk, hidden_ctk = collect_all('customtkinter')
+datas_dnd, binaries_dnd, hidden_dnd = collect_all('tkinterdnd2')
 
 a = Analysis(
     ['app.py'],
     pathex=[],
-    binaries=[],
-    datas=[('zip-folder.ico', '.')],
-    hiddenimports=['tkinterdnd2', 'tkcalendar', 'babel.numbers'],
+    binaries=binaries_ctk + binaries_dnd,
+    datas=[('zip-folder.ico', '.')] + datas_ctk + datas_dnd,
+    hiddenimports=['tkinterdnd2', 'tkcalendar', 'babel.numbers', 'customtkinter', 'darkdetect', 'PIL'] + hidden_ctk + hidden_dnd,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

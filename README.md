@@ -17,31 +17,14 @@ A high-performance desktop application built for civil engineers, structural des
 
 ## 🚀 Key Features in v2.0
 
-* ⚡ **Zero-Click Auto-Pack (`info.txt`)**: Put an `info.txt` file inside any project folder (e.g. `00share/`). When you drop the folder or its drawings into the app, it reads the naming metadata and **immediately generates all 6 files without a single click!**
-* 📁 **Smart Batch & Pair Detection**: Automatically identifies and matches corresponding `.dwg` and `.pdf` drawing pairs in folders or dropped files.
-* 📦 **Flexible Packaging Modes**:
-  * **CAD + PDF**: Standard drawing bundle (`.dwg` + `.pdf`).
-  * **ZIP + PDF**: Source model / background archive + sheet drawing.
-  * **All in One**: Full package (`.dwg` + `.pdf` + source `.zip`).
-* 🏷️ **Civil Engineering Revision Tags**:
-  * Quick-select presets (`R00`, `R01`, `REV-A`, `P1`, `C1`).
-  * Customizable revision numbers with toggle ON/OFF.
-* 📅 **Custom Date Formatting**:
-  * Integrated calendar picker (`tkcalendar`).
-  * Optional date inclusion in package filenames.
-* 🔤 **Flexible Naming Templates**:
-  * Choose between multiple industry naming templates (`Client_Project_Rev_Date`, `Client_Rev_Date`, etc.).
-  * Customizable separators (`_`, `-`, or spaces).
-* 📄 **Live Filename Preview**:
-  * Real-time preview of the target filename as you type.
-  * One-click **Copy Generated Name** button for transmittals and email logs.
-* 💾 **Recent Clients & Projects History**:
-  * Remembers previous clients and projects in editable dropdowns for lightning-fast workflows.
-  * One-click clipboard **Paste** buttons for fast input.
-* 🖱️ **Drag & Drop Support**: Drop folders or multiple drawing files directly into the window.
-* 📊 **File Status & Size Inspector**: Shows file sizes and status indicators for paired drawings.
-* ⚡ **Progress Bar & Explorer Integration**: Visual progress indicator and auto-opens output folder upon completion.
-* 🌙 **Modern Dark Theme**: Engineer-friendly dark slate interface designed for long drafting sessions.
+* 💎 **Modern Glassmorphism UI / UX**: Clean, frosted glass cards, rounded corners, subtle glows, and crystal-clear high-contrast typography.
+* 🌗 **Seamless Dark & Light Mode Toggle**: Switch between Obsidian Slate Dark and Crisp Frosted Light mode in one click with instantaneous theme transitions.
+* ⚡ **Zero-Click Auto-Pack (`info.txt`)**: Drop any folder containing an `info.txt` file (e.g. `00share/`), and it automatically extracts naming metadata and generates all 6 package files with 0 clicks!
+* 📋 **Strict 6-File Manifest Generation**: Generates 3 Client files (`{client}_{date}.pdf`, `.dwg`, `.zip`) + 3 Project files (`{project}.pdf`, `.dwg`, `.zip`).
+* 📁 **Smart Batch & Pair Detection**: Automatically identifies `.dwg`, `.pdf`, and `.zip` files from dropped folders or selection.
+* 📦 **Flexible Packaging Modes**: `CAD + PDF`, `ZIP + PDF`, or `All in One (CAD+PDF+ZIP)`.
+* 📅 **Custom Date Formatting**: Embedded calendar picker with instant toggle.
+* 📄 **Generate info.txt on the fly**: Create or update `info.txt` in any project folder with a single click.
 
 ---
 
@@ -53,7 +36,7 @@ A high-performance desktop application built for civil engineers, structural des
 ### Install Required Libraries
 
 ```bash
-pip install tkinterdnd2 tkcalendar pillow
+pip install customtkinter darkdetect tkinterdnd2 tkcalendar pillow
 ```
 
 ---
