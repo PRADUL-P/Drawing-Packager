@@ -26,11 +26,11 @@ A high-performance desktop engineering application built for civil engineers, st
 
 ### ⬇️ Download & Quick Start:
 
-[![Download Windows EXE](https://img.shields.io/badge/⚡_DOWNLOAD_STANDALONE_EXE-v2.0-2563eb?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/PRADUL-P/Drawing-Packager/releases)
+[![Download Windows EXE](https://img.shields.io/badge/⚡_DIRECT_DOWNLOAD-LUDARP.Drawing.Packager.exe-2563eb?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/PRADUL-P/Drawing-Packager/releases/download/v2.0/LUDARP.Drawing.Packager.exe)
 
-👉 **[Click Here to Download Latest Release (v2.0)](https://github.com/PRADUL-P/Drawing-Packager/releases)**
+👉 **[Direct Download (.exe)](https://github.com/PRADUL-P/Drawing-Packager/releases/download/v2.0/LUDARP.Drawing.Packager.exe)** | **[View GitHub Release (v2.0)](https://github.com/PRADUL-P/Drawing-Packager/releases/tag/v2.0)**
 
-1. **Download:** Click the download button above to get **`LUDARP Drawing Packager.exe`**.
+1. **Download:** Click the direct download button above to get **`LUDARP.Drawing.Packager.exe`**.
 2. **Launch:** Double-click the `.exe` file to open the app directly.
 3. **Package:** Drag and drop your drawing folder or files — generate all 6 contract-compliant packages in 1 click!
 
