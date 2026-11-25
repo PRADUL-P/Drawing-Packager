@@ -101,17 +101,17 @@ Real-time inspection cards for each supported drawing type:
 
 ---
 
-## 📋 Quality Assurance & Standard Operating Procedure (SOP)
+## 📘 Simple User Guide & Step-by-Step Manual
 
-This repository includes a formal engineering **Standard Operating Procedure (SOP)** compliant with civil, structural, and architectural document control protocols:
+Need a plain-English guide explaining **every single button, field, toggle, and workflow** in the app?
 
-👉 **Read the full Quality Manual:** [**`QUALITY_PROCEDURE.md`**](QUALITY_PROCEDURE.md)
+👉 **[Read the Simple User Guide & Quality Procedure (`QUALITY_PROCEDURE.md`)](QUALITY_PROCEDURE.md)**
 
-### Key Quality Checkpoints:
-1. Pre-packaging file audits (purged DWGs, vector-exported PDFs).
-2. Verification of all 6 generated files.
-3. Client vs Project naming isolation check.
-4. Internal `.zip` archive integrity testing.
+### Highlights in the User Guide:
+1. **Screen Tour:** Clear explanations of all inputs, paste buttons, theme switches, and visual file cards.
+2. **The 6 Output Files:** What each file is and where it is saved.
+3. **Zero-Click vs. 3-Step Manual Workflow:** How to use the app in seconds.
+4. **10-Second Quality Checklist:** How to verify files before dispatching to clients.
 
 ---
 

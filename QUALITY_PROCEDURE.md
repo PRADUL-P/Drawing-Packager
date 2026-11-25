@@ -1,137 +1,143 @@
-# 📋 LUDARP Drawing Packaging & Dispatch Quality Procedure (SOP)
+# 📘 LUDARP Drawing Packager — Simple User Guide
 
-**Document Code:** SOP-CAD-PKG-001  
-**Version:** 2.0  
-**Effective Date:** 2026-11-24  
-**Scope:** Civil, Structural, Architectural & BIM Drawing Transmittals  
+Welcome to **LUDARP Drawing Packager**! This simple guide explains **every button, every field, and every feature** in plain language so anyone in your team can use it in seconds.
 
 ---
 
-## 1. Objective & Purpose
+## 💡 What Does This App Do in 10 Seconds?
 
-This Standard Operating Procedure (SOP) defines the mandatory engineering quality procedure for preparing, validating, and generating standardized 6-file drawing packages using the **LUDARP Drawing Packager**.
+In civil and structural drafting, when you dispatch a drawing, you usually need to send:
+1. **Client Files** (clean files named with the client's name and date, with no internal revision tags).
+2. **Project Files** (internal archive files named with project code or drawing number).
 
-The objective is to eliminate human error, guarantee 100% naming compliance across client and internal project archives, prevent revision corruption, and automate drawing bundle distribution in civil engineering workflows.
-
----
-
-## 2. The 6-File Dispatch Architecture
-
-Every drawing issue must generate **exactly 6 verified output files** divided into two distinct sets:
-
-```text
-📁 output_files/
-│
-├── 🔹 CLIENT SUBMISSION SET (3 Files - For External Issuance)
-│   ├── [CLIENT_NAME]_[DD-MM-YYYY].pdf   (High-resolution vector PDF sheet)
-│   ├── [CLIENT_NAME]_[DD-MM-YYYY].dwg   (Clean AutoCAD drawing file)
-│   └── [CLIENT_NAME]_[DD-MM-YYYY].zip   (Compressed bundle with inner named files)
-│
-└── 🔸 PROJECT ARCHIVE SET (3 Files - For Internal Project Records)
-    ├── [PROJECT_NAME].pdf               (Permanent project sheet archive)
-    ├── [PROJECT_NAME].dwg               (Permanent project CAD drawing archive)
-    └── [PROJECT_NAME].zip               (Full project model & background archive)
-```
-
-> [!IMPORTANT]
-> **Strict Naming Isolation:**
-> - **Client Files** are named strictly after the Client/Contractor with optional issuance date. **No internal revision numbers** appear on client files unless explicitly specified.
-> - **Project Files** are named strictly after the Project/Drawing Code (e.g. `METRO_TERMINAL_B101` or `C-101_REV02`).
+Instead of manually renaming, copying, and zipping 6 separate files one by one, **this app does all 6 files in 1 single click!**
 
 ---
 
-## 3. Pre-Packaging File Requirements & Checks
+## 🎯 What Are the 6 Output Files Created?
 
-Before launching the packager, the Drafting / BIM team must ensure the following three core files are prepared:
+Whenever you package a drawing, the app creates a folder named `output_files/` containing:
 
-| File Type | Mandatory? | Requirements & Quality Standard |
+| # | File Name | What is it? |
 |---|---|---|
-| **PDF Sheet (`.pdf`)** | **YES (Mandatory)** | Vector-exported, correct title block, approved stamps/signatures, scale verified. |
-| **CAD Drawing (`.dwg`)** | Recommended | Purged (`PURGE`), audited (`AUDIT`), xrefs bound/relative, Layer 0 standard. |
-| **ZIP Archive (`.zip`)** | Optional | Contains reference surveys, BIM models, point clouds, or background assets. |
-| **Metadata File (`info.txt`)** | Optional (for Auto-Pack) | Text file with `Client: [Name]` and `Project: [Name]`. |
+| **1** | `[Client]_[Date].pdf` | The official PDF sheet for the client. |
+| **2** | `[Client]_[Date].dwg` | The AutoCAD drawing file for the client. |
+| **3** | `[Client]_[Date].zip` | A compressed zip folder with client-named files inside. |
+| **4** | `[Project].pdf` | The PDF sheet for your internal server archive. |
+| **5** | `[Project].dwg` | The CAD drawing for your internal server archive. |
+| **6** | `[Project].zip` | The complete project model archive for internal records. |
 
 ---
 
-## 4. Standard Operating Procedures (Two Workflows)
+## 🖥️ Screen Guide: Every Field & Button Explained
 
-### Workflow A: Zero-Click Auto-Packaging (Recommended for High Volume)
+### 1. Top Header Bar
 
-1. **Place `info.txt` in the source folder** (e.g. `00share/` or drawing folder) containing:
+* **`🌙 Dark` / `☀️ Light` (Theme Switch):**  
+  Click to instantly switch between dark mode (easy on the eyes) and bright light mode. The app remembers your choice next time you open it.
+* **`📄 Generate info.txt`:**  
+  Click this button to save a little configuration file (`info.txt`) with client and project names inside any folder.
+* **`⚡ Auto-Pack on Drop` (Switch):**  
+  - When **ON (Recommended)**: If you drop a folder that already contains an `info.txt`, the app automatically packages all 6 files **immediately with 0 clicks!**
+  - When **OFF**: Dropping a folder loads the names and files, but waits for you to review and click the Generate button.
+
+---
+
+### 2. Left Panel: Dispatch Details
+
+* **`CLIENT NAME` Field:**  
+  Type the client or contractor name here (e.g. `Acme Corp` or `MR. SMITH`).  
+  - This name is **strictly used for client files**.
+  - Internal revision tags will **never** be attached to client files.
+* **`Paste` Button (next to Client):**  
+  Click to paste text copied from your clipboard into the Client field.
+* **`PROJECT NAME` Field:**  
+  Type the internal project number or drawing title (e.g. `VILLA_402` or `METRO_TERMINAL_B101`).  
+  - *Tip: If you leave this blank, the app will automatically use the name of the drawing file!*
+* **`Paste` Button (next to Project):**  
+  Click to paste text copied from your clipboard into the Project field.
+* **`Include Date on Client Package` (Toggle):**  
+  - **ON**: Appends today's date (e.g. `_25-11-2026`) to the client files so you know exactly when it was sent.
+  - **OFF**: Uses only the client name without any date.
+* **Calendar Date Picker:**  
+  Click to change the dispatch date if you are preparing drawings for a future or past date.
+* **`💾 Save Current Names as info.txt`:**  
+  Saves whatever you typed in Client and Project as an `info.txt` file in your selected folder.
+* **`🎯 TARGET OUTPUT MANIFEST (6 FILES)` Preview Box:**  
+  A live preview that updates in real-time as you type, showing the exact 6 filenames that will be generated before you even click package.
+
+---
+
+### 3. Right Panel: Drop Zone & File Slots
+
+* **Large Drop Zone (`📂 ⬆️ DRAG & DROP`):**  
+  Drag and drop any folder or drawing files directly here from your computer.  
+  - Works with folders with spaces in their names (e.g. `E:\Drawing packer\00share`).
+  - Automatically searches the folder for matching `.dwg`, `.pdf`, `.zip`, and `info.txt` files!
+* **`📁 Choose Folder...` Button:**  
+  If you prefer not to drag and drop, click this button to open a file browser and pick your project folder.
+* **Visual File Slots (PDF, CAD, ZIP):**
+  - 🔴 **`PDF SHEET` Card:** Shows your loaded `.pdf` filename and file size (e.g. `Foundation_Plan.pdf (2.4 MB)`). Turns green when loaded.
+  - 🔵 **`CAD DRAWING` Card:** Shows your loaded `.dwg` AutoCAD drawing filename and file size.
+  - 🟡 **`ZIP ARCHIVE` Card:** Shows any reference zip file (like survey data or background models). This slot is optional.
+  - **`Browse` Button (on each card):** Click to pick a specific file manually if you want to replace one.
+* **`Packaging Mode` Dropdown:**
+  - **`CAD + PDF`**: Packages CAD drawing and PDF sheet together.
+  - **`ZIP + PDF`**: Packages reference ZIP and PDF sheet together.
+  - **`All in One (CAD+PDF+ZIP)`**: Packages all 3 files together into the zip. (Auto-selected if a ZIP file is found).
+* **`⚡ GENERATE ALL 6 PACKAGE FILES` (Big Green Button):**  
+  Click this button (or press the **`<Enter>`** key on your keyboard) to create all 6 files instantly!
+* **`📂 Open Output Folder` Button:**  
+  Opens Windows File Explorer directly inside `output_files/` so you can view, attach, or send your 6 finished files.
+* **`🔄 Reset All` Button:**  
+  Clears the inputs and resets the file slots back to clean state.
+* **Status Label:**  
+  Shows helpful live status messages like `Ready`, `Loaded: PDF, DWG`, `Packaging 6 files...`, or `Done! ✅`.
+
+---
+
+## 🚀 How to Use It (Choose Your Way)
+
+### Method 1: The "0-Click" Way (Fastest for Daily Work)
+
+1. Put a simple text file named `info.txt` in your drawing folder with two lines:
    ```text
-   Client: ACME_INFRASTRUCTURE_CORP
+   Client: ACME_INFRASTRUCTURE
    Project: METRO_TERMINAL_B101
    ```
-   *(Tip: Use the **"💾 Save Current Names as info.txt"** button in the app if you want to generate this file automatically).*
-2. **Launch `LUDARP Drawing Packager`** (via `.exe` or `python app.py`).
-3. Ensure **`⚡ Auto-Pack on Drop`** toggle is **ON** in the top navigation bar.
-4. **Drag and drop** the entire folder into the application window.
-5. **Result:** The system instantly reads `info.txt`, detects CAD, PDF, and ZIP files, generates all 6 files in `output_files/`, and automatically opens Windows Explorer for immediate transmittal.
+2. Open **LUDARP Drawing Packager**.
+3. **Drag and drop the folder into the app window.**
+4. **Done!** The app automatically reads the names, packs all 6 files into `output_files/`, and pops open the folder in Windows Explorer. You didn't even have to click a single button!
 
 ---
 
-### Workflow B: Manual Quality Review Packaging
+### Method 2: The "3-Step Manual" Way
 
-1. **Launch `LUDARP Drawing Packager`**.
-2. **Input Client Name:** Enter client / contractor name (or use **Paste** button).
-3. **Input Project Name:** Enter project code / drawing number (or leave blank to auto-inherit drawing name).
-4. **Configure Date:**
-   - Check **"Include Date on Client Package"** (Default: ON).
-   - Verify date in calendar picker (`DD-MM-YYYY`).
-5. **Drop Files or Folder:** Drag & drop the drawing folder or click **"📁 Choose Folder..."**.
-6. **Verify Visual File Status Cards:**
-   - 🔴 **PDF Sheet**: Must show file name and file size in green border.
-   - 🔵 **CAD Drawing**: Shows file name and size.
-   - 🟡 **ZIP Archive**: Shows archive name (or optional status).
-7. **Verify Target Manifest:** Inspect the live preview box under **"TARGET OUTPUT MANIFEST"** to confirm all 6 filenames match client contract specifications.
-8. **Select Packaging Mode:**
-   - `CAD + PDF`: Standard 2-format transmittal.
-   - `ZIP + PDF`: Model archive + sheet.
-   - `All in One (CAD+PDF+ZIP)`: Full submission package.
-9. **Click `⚡ GENERATE ALL 6 PACKAGE FILES`** (or press `<Enter>`).
-10. The output folder opens automatically.
+1. Open the app and type the **Client Name** and **Project Name** (or click **Paste**).
+2. **Drag and drop** your drawing folder or files into the drop zone.
+3. Click the big green button: **`⚡ GENERATE ALL 6 PACKAGE FILES`** (or hit `<Enter>`).
+4. Windows Explorer will open up automatically showing your 6 ready-to-send files!
 
 ---
 
-## 5. QA/QC Verification Checklist
+## 🔍 Simple Quality Check Before Sending
 
-Before emailing or uploading packages to the Client Portal / CDE (Common Data Environment), the Lead Engineer or Document Controller must perform this checklist:
+Before sending files to your client or uploading to a portal, do a quick 10-second check:
 
-```markdown
-[ ] 1. All 6 files exist in the `output_files` directory.
-[ ] 2. Client files match the exact legal client name.
-[ ] 3. Project files match the drawing/BIM register number.
-[ ] 4. PDF files open cleanly and text is selectable (vector).
-[ ] 5. DWG files open in AutoCAD/Civil 3D without proxy/missing xref alerts.
-[ ] 6. ZIP files open cleanly and test without CRC/corruption errors.
-[ ] 7. Inner filenames inside the `.zip` archive match contract requirements.
-[ ] 8. Date stamped on client files matches the official transmittal date.
-```
+1. **Count the files:** Are there 6 files in the `output_files/` folder? (3 client files + 3 project files).
+2. **Check client names:** Do the client files have the correct client name and date?
+3. **Check project names:** Do the project files have your internal drawing number?
+4. **Test the files:** Open the PDF to make sure sheets look good, and open the ZIP to confirm the inner files are present.
 
 ---
 
-## 6. Archival & Transmittal Protocol
+## ❓ Common Questions & Quick Fixes
 
-1. **External Transmittal:**
-   - Send the **Client Set** (`.pdf`, `.dwg`, `.zip`) attached to the formal Transmittal Sheet (`DOC-TR-XXXX`).
-2. **Internal Server Archival:**
-   - Move the **Project Set** (`.pdf`, `.dwg`, `.zip`) into the permanent internal project directory under `X:\Projects\[PROJECT_CODE]\Dispatched\`.
-3. **Audit Log:**
-   - The packager remembers the last 15 clients and projects automatically in `~/.ludarp_packager_config.json` for rapid repeat issues.
-
----
-
-## 7. Troubleshooting & Exception Handling
-
-| Issue / Alert | Root Cause | Corrective Action |
-|---|---|---|
-| **"PDF Required" popup** | No `.pdf` detected in the folder or dropped selection. | Export PDF from AutoCAD/Revit sheet layout and re-drop. |
-| **"Client Name Required"** | Client input field is empty and no `info.txt` was found. | Type Client name or generate `info.txt` using the top button. |
-| **DWG shows "Missing DWG"** | Drawing is stored in a subfolder or has an unsupported extension. | Click **Browse** on the CAD card to manually select the `.dwg`. |
-| **File locked / Permission denied** | A file is open in AutoCAD, Acrobat, or 7-Zip. | Save and close the drawing in AutoCAD/Acrobat, then re-click Generate. |
-| **Spaces in folder path** | Directory names have special characters or spaces. | LUDARP v2.0 natively parses paths with spaces. Ensure read/write access. |
-
----
-
-**Approved by:** Engineering Quality & Document Control Team  
-**System:** LUDARP Drawing Packager v2.0
+* **Q: It says "PDF Required"?**  
+  *A:* Every package must have at least a PDF drawing sheet. Export your PDF from CAD or Revit and drop it in.
+* **Q: It says "Client Name Required"?**  
+  *A:* Make sure you typed a Client Name in the left box, or provided an `info.txt` file.
+* **Q: Can I run this without installing Python?**  
+  *A:* **Yes!** Just download and double-click **`LUDARP.Drawing.Packager.exe`**. It works on any Windows 10 or 11 PC without needing Python installed.
+* **Q: Where are the output files saved?**  
+  *A:* In a folder named `output_files/` inside the same folder where your drawings are located. The app also opens this folder automatically as soon as it finishes.
