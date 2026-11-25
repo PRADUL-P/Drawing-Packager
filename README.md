@@ -195,6 +195,24 @@ Drawing-Packager/
 
 ---
 
+## 🔮 Upcoming Updates & Roadmap (Adopted for Future Releases)
+
+The following high-priority features have been officially **adopted for upcoming releases**:
+
+* 🗂️ **Multi-Drawing Bulk / Batch Mode:**
+  * When a folder contains multiple drawings (e.g. `C-101.dwg`, `C-101.pdf`, `C-102.dwg`, `C-102.pdf`...), the app will automatically detect all matching pairs.
+  * Allows packaging all drawings in one single batch run instead of one at a time.
+
+* ✉️ **"Pack & Email" (1-Click Outlook Integration):**
+  * Adds an **`📧 Pack & Open in Email`** button.
+  * Automatically creates a draft email in Microsoft Outlook with the 3 Client files (`.pdf`, `.dwg`, `.zip`) pre-attached, transmittal subject line pre-filled, and standard dispatch text ready to send.
+
+* ⚙️ **Custom Naming Formula Builder (Smart Filename-Based Naming):**
+  * Customizable formula engine in settings to automatically extract and format names based on the original drawing filename.
+  * Supports dynamic formula tokens: `{Client}`, `{Project}`, `{FileName}`, `{Date}`, `{Rev}`, and custom separators (`_`, `-`).
+
+---
+
 ## 👨‍💻 Author
 
 **Pradul P**  

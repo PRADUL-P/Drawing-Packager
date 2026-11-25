@@ -139,5 +139,15 @@ Before sending files to your client or uploading to a portal, do a quick 10-seco
   *A:* Make sure you typed a Client Name in the left box, or provided an `info.txt` file.
 * **Q: Can I run this without installing Python?**  
   *A:* **Yes!** Just download and double-click **`LUDARP.Drawing.Packager.exe`**. It works on any Windows 10 or 11 PC without needing Python installed.
+* **Q: What if I have 2 or more PDF or CAD drawings in the same folder? Which one is selected?**  
+  *A:* In the current release (v2.0), the app automatically picks the **first** `.dwg` and the **first** `.pdf` it finds in the folder. If you want to package a different drawing, simply click the **`Browse`** button on the file's card to pick whichever one you want. *(Note: Full multi-drawing bulk batch packaging is officially adopted for the next update!).*
 * **Q: Where are the output files saved?**  
   *A:* In a folder named `output_files/` inside the same folder where your drawings are located. The app also opens this folder automatically as soon as it finishes.
+
+---
+
+## 🔮 Adopted Features for Upcoming Releases
+
+1. 🗂️ **Multi-Drawing Bulk / Batch Mode:** Automatically detect and batch-package all drawing pairs in a folder at once.
+2. ✉️ **"Pack & Email" (1-Click Outlook Integration):** 1-click button to create an Outlook email with the 3 client files attached and ready to send.
+3. ⚙️ **Custom Naming Formula Builder:** Auto-extract names based on original filenames with customizable formula tags.
